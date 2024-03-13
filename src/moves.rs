@@ -1,5 +1,9 @@
-use std::collections::HashSet;
-use crate::{Board, Color, HEIGHT, Piece, PieceType, WIDTH};
+use std::collections::{HashMap, HashSet};
+use crate::board::{Board, Color, HEIGHT, PieceType, WIDTH};
+use crate::Color::{Black, White};
+
+const START_RANK_WHITE: usize = 1;
+const START_RANK_BLACK: usize = 6;
 
 fn move_straight(board: &Board, row: usize, col: usize) -> Vec<(usize, usize)> {
     let current_color = board.squares[row][col].expect("Only occupied squares expected").color;
@@ -55,6 +59,7 @@ pub fn moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
         None => HashSet::new(),
         Some(p) => match p.kind {
             PieceType::King => {
+                // todo implement castle move
                 let result = [move_straight(board, row, col), move_diagonally(board, row, col)].concat();
                 result.into_iter()
                     .map(|(r, c)| (r as i8, c as i8))
@@ -80,18 +85,77 @@ pub fn moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
                     .collect()
             }
             PieceType::Pawn => {
-                HashSet::new()
+                let (move_one, move_two, start_rank) = match p.color {
+                    Color::White => (i_row + 1, i_row + 2, START_RANK_WHITE),
+                    Color::Black => (i_row - 1, i_row - 2, START_RANK_BLACK)
+                };
+                let moves_forward =
+                    if row == start_rank && move_two < HEIGHT as i8 && board.squares[move_one as usize][col].is_none() && board.squares[move_two as usize][col].is_none() {
+                        vec!((move_one as usize, col), (move_two as usize, col))
+                    }
+                    else if move_one < HEIGHT as i8 && board.squares[move_one as usize][col].is_none() {
+                        vec!((move_one as usize, col))
+                    }
+                    else {
+                        Vec::new()
+                    };
+                let moves_capturing: Vec<(usize, usize)> = [(move_one, i_col - 1), (move_one, i_col + 1)].iter()
+                    .filter(|(r, c)| *r >= 0 && *c >=0 && *r < HEIGHT as i8 && *c < WIDTH as i8)
+                    .map(|(r, c)| (*r as usize, *c as usize))
+                    .filter(|(r, c)| match board.squares[*r][*c] {
+                        None => {
+                            match board.move_history.last() {
+                                None => false,
+                                Some(&(last_piece, last_start, last_stop)) =>
+                                    last_piece.kind == PieceType::Pawn &&
+                                        last_piece.color != p.color &&
+                                        (last_start.0 == START_RANK_BLACK || last_start.0 == START_RANK_WHITE) &&
+                                        last_start.1 == *c &&
+                                        last_stop.0 == row
+                            }
+                        },
+                        Some(piece) => piece.color != p.color
+                    })
+                    .collect();
+
+                [moves_forward, moves_capturing].concat().iter().copied().collect()
             }
         }
     }
 }
 
+pub fn king_moves(board: &Board, all_moves: &HashMap<(usize, usize), HashSet<(usize, usize)>>, row: usize, col: usize) -> HashSet<(usize, usize)> {
+    let attacked_squares: HashSet<(usize, usize)> = all_moves.iter()
+        .flat_map(|(rc, m)| m)
+        .copied()
+        .collect();
+    moves(board, row, col).difference(&attacked_squares).copied().collect()
+}
+
+fn filter_by_color(board: &Board, occupied_squares: &Vec<(Color, usize, usize)>, to_find: Color) -> HashMap<(usize, usize), HashSet<(usize, usize)>> {
+    occupied_squares.iter().
+        filter(|(color, row, col)| *color == to_find)
+        .map(|&(_, row, col)| ((row, col), moves(board, row, col)))
+        .collect()
+}
+
+pub fn all_moves(board: &Board) -> (HashMap<(usize, usize), HashSet<(usize, usize)>>, HashMap<(usize, usize), HashSet<(usize, usize)>>) {
+    let occupied_squares: Vec<(Color, usize, usize)> = (0..HEIGHT).into_iter()
+        .flat_map(|r| (0..WIDTH).into_iter().map(move |c| (r, c)))
+        .filter(|(r, c)| board.squares[*r][*c].is_some())
+        .map(|(r, c)| (board.squares[r][c].unwrap().color, r, c))
+        .collect();
+    let white_moves = filter_by_color(board, &occupied_squares, White);
+    let black_moves = filter_by_color(board, &occupied_squares, Black);
+    (white_moves, black_moves)
+}
+
 #[cfg(test)]
 mod test {
     use std::collections::HashSet;
-    use crate::{Board, Color, HEIGHT, new_board, Piece, PieceType, WIDTH};
+    use crate::board::{Board, Color, HEIGHT, new_board, Piece, PieceType, WIDTH};
     use crate::Color::{Black, White};
-    use crate::moves::moves;
+    use crate::moves::{all_moves, king_moves, moves};
 
     fn board_one_piece(row: usize, col: usize, color: Color, kind: PieceType) -> Board {
         let mut board = Board{
@@ -107,6 +171,17 @@ mod test {
         let board = board_one_piece(0, 0, Color::White, PieceType::King);
         let empty_moves = moves(&board, 1, 1);
         assert_eq!(empty_moves, HashSet::new());
+    }
+
+    #[test]
+    fn test_king_cannot_move_to_attacked_square() {
+        let mut board = board_one_piece(4, 4, White, PieceType::King);
+        board.squares[0][3] = Some(Piece{color: Black, kind: PieceType::Rook});
+        board.squares[7][5] = Some(Piece{color: Black, kind: PieceType::Rook});
+        board.squares[2][4] = Some(Piece{color: Black, kind: PieceType::King});
+        let (_, all_moves_black) = all_moves(&board);
+        let actual_moves = king_moves(&board, &all_moves_black, 4, 4);
+        assert_eq!(actual_moves, HashSet::from([(5, 4)]));
     }
 
     #[test]
@@ -222,5 +297,36 @@ mod test {
             (7, 4), (7, 6), (4, 7), (6, 7),
             (3, 4), (3, 6), (4, 3), (6, 3)
         ]));
+    }
+
+    #[test]
+    fn test_pawn_moves() {
+        let board = new_board();
+        let actual_moves = moves(&board, 1, 0);
+        assert_eq!(actual_moves, HashSet::from([(2, 0), (3, 0)]));
+
+        let actual_moves = moves(&board, 6, 6);
+        assert_eq!(actual_moves, HashSet::from([(5, 6), (4, 6)]));
+
+        let board = board_one_piece(6, 1, Color::White, PieceType::Pawn);
+        let actual_moves = moves(&board, 6, 1);
+        assert_eq!(actual_moves, HashSet::from([(7, 1)]));
+
+        let board = board_one_piece(6, 1, Color::Black, PieceType::Pawn);
+        let actual_moves = moves(&board, 6, 1);
+        assert_eq!(actual_moves, HashSet::from([(4, 1), (5, 1)]));
+
+        let mut board = board_one_piece(3, 3, Color::Black, PieceType::Pawn);
+        board.squares[2][2] = Some(Piece{color: White, kind: PieceType::Pawn});
+        board.squares[2][3] = Some(Piece{color: White, kind: PieceType::Pawn});
+        board.squares[2][4] = Some(Piece{color: White, kind: PieceType::Pawn});
+        let actual_moves = moves(&board, 3, 3);
+        assert_eq!(actual_moves, HashSet::from([(2, 2), (2, 4)]));
+
+        let mut board = board_one_piece(4, 4, Color::White, PieceType::Pawn);
+        board.squares[4][3] = Some(Piece{color: Black, kind: PieceType::Pawn});
+        board.move_history = vec![(Piece{color: Black, kind: PieceType::Pawn}, (6, 3), (4, 3))];
+        let actual_moves = moves(&board, 4, 4);
+        assert_eq!(actual_moves, HashSet::from([(5, 4), (5, 3)]));
     }
 }
