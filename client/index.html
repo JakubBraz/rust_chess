@@ -6,21 +6,25 @@
 </head>
 <body>
   <p>Chess client</p>
+  <p>
+    <button id="create_button" onclick="createGameButton()">Create</button>
+    <button id="join_button" onclick="joinGameButton()">Join</button>
+  </p>
 
-  <table>
-    <tr>
-      <td>1</td>
-      <td>&#9817</td>
-      <td>3</td>
-    </tr>
-    <tr>
-      <td>4</td>
-      <td id="field">&#9823</td>
-      <td>6</td>
-    </tr>
-  </table>
+<!--  <table>-->
+<!--    <tr>-->
+<!--      <td>1</td>-->
+<!--      <td>&#9817</td>-->
+<!--      <td>3</td>-->
+<!--    </tr>-->
+<!--    <tr>-->
+<!--      <td>4</td>-->
+<!--      <td id="field">&#9823</td>-->
+<!--      <td>6</td>-->
+<!--    </tr>-->
+<!--  </table>-->
 
-  <canvas id = "chess-board" width="800" height="800"></canvas>
+  <canvas id="chess-board" width="800" height="800"></canvas>
 
   <script src="client_script.js"></script>
 </body>

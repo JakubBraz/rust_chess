@@ -38,7 +38,7 @@ pub struct Board {
 
 pub fn to_string(board: &Board) -> String {
     let mut result: String = String::new();
-    for row in (0 .. HEIGHT).rev() {
+    for row in (0 .. HEIGHT) {
         for col in 0 .. 8 {
             let icon = match &board.squares[row][col] {
                 None => ' ',
@@ -55,7 +55,8 @@ pub fn to_string(board: &Board) -> String {
         }
         result.push('\n');
     }
-    result
+    let r = &result[0..result.len()-1];
+    r.to_string()
 }
 
 impl serde::Serialize for Board {

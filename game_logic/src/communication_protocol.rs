@@ -5,7 +5,23 @@ pub enum MsgType {
 
 #[derive(Debug, serde::Deserialize)]
 pub struct JsonMsg {
-    msg_type: MsgType,
-    room_id: Option<u32>,
-    make_move: Option<((usize, usize), (usize, usize))>
+    pub msg_type: MsgType,
+    pub room_id: Option<u32>,
+    pub make_move: Option<((usize, usize), (usize, usize))>
+}
+
+#[derive(serde::Serialize)]
+pub enum MsgTypeServer {
+    Board,
+    IllegalMove,
+    WhiteWon,
+    BlackWon,
+    Rooms,
+}
+
+#[derive(serde::Serialize)]
+pub struct JsonMsgServer {
+    pub msg_type: MsgTypeServer,
+    pub rooms: Vec<u32>,
+    pub board: Option<String>,
 }

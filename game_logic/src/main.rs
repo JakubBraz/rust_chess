@@ -1,14 +1,14 @@
 use std::collections::HashMap;
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{current, sleep, spawn};
 use std::time::Duration;
 
 use rand::random;
-use tungstenite::{accept, Message};
+use tungstenite::{accept, Message, WebSocket};
 
 use crate::board::{Board, Color, new_board, to_string};
-use crate::communication_protocol::JsonMsg;
+use crate::communication_protocol::{JsonMsg, JsonMsgServer, MsgType, MsgTypeServer};
 
 mod moves;
 mod board;
@@ -24,6 +24,7 @@ fn draw_board(board: &Board) {
     }
 }
 
+// fn thread_game_monitor(boards: Arc<Mutex<HashMap<u32, (Board, Vec<WebSocket<TcpStream>>)>>>) {
 fn thread_game_monitor(boards: Arc<Mutex<HashMap<u32, Board>>>) {
     loop {
         println!("{:?} - {:?}", current().id(), boards.lock().unwrap().keys());
@@ -43,6 +44,8 @@ fn main() {
     let s = serde_json::to_string(&board).expect("Cannot serialize");
     println!("Serialized: {}", s);
 
+    // todo change Mutex to RwLock
+    // let mut boards: Arc<Mutex<HashMap<u32, (Board, Vec<WebSocket<TcpStream>>)>>> = Arc::new(Mutex::new(HashMap::new()));
     let mut boards: Arc<Mutex<HashMap<u32, Board>>> = Arc::new(Mutex::new(HashMap::new()));
 
     let boards_clone = boards.clone();
@@ -55,6 +58,7 @@ fn main() {
             let thread_id = current().id();
             let s = stream.expect("Cannot use tcp stream");
             let mut websocket = accept(s).expect("Cannot create websocket");
+            let b = new_board();
             loop {
                 let msg = websocket.read().expect("Cannot read message");
 
@@ -66,8 +70,21 @@ fn main() {
                     // let decoded: Value = serde_json::from_str(&m).expect("Cannot decode");
                     println!("{:?}", decoded);
 
+                    match decoded.msg_type {
+                        MsgType::Join => {}
+                        MsgType::Create => {
+                            // let game_id: u32 = random();
+                            // let new_board = new_board();
+                            // let ws: Vec<WebSocket<TcpStream>> = vec![websocket];
+                            // boards_clone.lock().expect("Cannot lock").insert(game_id, (new_board, ws));
+                        }
+                        MsgType::Move => {}
+                    };
+
                     boards_clone.lock().expect("Cannot lock").insert(random(), new_board());
-                    websocket.send(Message::Text("ok".into())).expect("Cannot send");
+                    let server_msg = JsonMsgServer {msg_type: MsgTypeServer::Board, board: Some(to_string(&b)), rooms: Vec::new()};
+                    let msg = serde_json::to_string(&server_msg).expect("Cannot serialize");
+                    websocket.send(Message::Text(msg)).expect("Cannot send");
                 }
             }
         });
