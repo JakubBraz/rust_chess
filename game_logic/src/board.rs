@@ -1,3 +1,5 @@
+use serde::{Serializer};
+
 pub const WIDTH: usize = 8;
 pub const HEIGHT: usize = 8;
 
@@ -11,12 +13,12 @@ pub enum PieceType {
     Pawn,
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Color {
     White, Black
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Piece {
     pub color: Color,
     pub kind: PieceType
@@ -28,9 +30,38 @@ impl Piece {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Board {
     pub squares: [[Option<Piece>; WIDTH]; HEIGHT],
     pub move_history: Vec<(Piece, (usize, usize), (usize, usize))>
+}
+
+pub fn to_string(board: &Board) -> String {
+    let mut result: String = String::new();
+    for row in (0 .. HEIGHT).rev() {
+        for col in 0 .. 8 {
+            let icon = match &board.squares[row][col] {
+                None => ' ',
+                Some(p) => match p.kind {
+                    PieceType::King => if p.color == Color::White {'K'} else {'k'},
+                    PieceType::Queen => if p.color == Color::White {'Q'} else {'q'},
+                    PieceType::Rook => if p.color == Color::White {'R'} else {'r'},
+                    PieceType::Bishop => if p.color == Color::White {'B'} else {'b'},
+                    PieceType::Knight => if p.color == Color::White {'N'} else {'n'},
+                    PieceType::Pawn => if p.color == Color::White {'P'} else {'p'},
+                }
+            };
+            result.push(icon);
+        }
+        result.push('\n');
+    }
+    result
+}
+
+impl serde::Serialize for Board {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        serializer.serialize_str(to_string(self).as_str())
+    }
 }
 
 fn new_pieces(color: Color) -> [Option<Piece>; WIDTH] {

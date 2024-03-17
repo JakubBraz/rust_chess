@@ -126,7 +126,7 @@ pub fn moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
 
 pub fn king_moves(board: &Board, all_moves: &HashMap<(usize, usize), HashSet<(usize, usize)>>, row: usize, col: usize) -> HashSet<(usize, usize)> {
     let attacked_squares: HashSet<(usize, usize)> = all_moves.iter()
-        .flat_map(|(rc, m)| m)
+        .flat_map(|(_, m)| m)
         .copied()
         .collect();
     moves(board, row, col).difference(&attacked_squares).copied().collect()
@@ -134,7 +134,7 @@ pub fn king_moves(board: &Board, all_moves: &HashMap<(usize, usize), HashSet<(us
 
 fn filter_by_color(board: &Board, occupied_squares: &Vec<(Color, usize, usize)>, to_find: Color) -> HashMap<(usize, usize), HashSet<(usize, usize)>> {
     occupied_squares.iter().
-        filter(|(color, row, col)| *color == to_find)
+        filter(|(color, _, _)| *color == to_find)
         .map(|&(_, row, col)| ((row, col), moves(board, row, col)))
         .collect()
 }
