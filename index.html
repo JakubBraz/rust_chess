@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="">
+<head>
+  <title>Chess</title>
+  <link rel="stylesheet" href="client/styles.css">
+</head>
+<body>
+  <div id="lobby">
+    <p>Chess client</p>
+    <button id="create_button" onclick="createGameButton()">Create</button>
+    <table id="rooms">
+      <tr>
+        <td>123</td>
+        <td><button onclick="joinGameButton()">Join</button></td>
+      </tr>
+<!--      <div class="join_button">456<button onclick="joinGameButton()">Join</button></div>-->
+<!--      <div class="join_button">789<button onclick="joinGameButton()">Join</button></div>-->
+    </table>
+  </div>
+
+<!--  <table>-->
+<!--    <tr>-->
+<!--      <td>1</td>-->
+<!--      <td>&#9817</td>-->
+<!--      <td>3</td>-->
+<!--    </tr>-->
+<!--    <tr>-->
+<!--      <td>4</td>-->
+<!--      <td id="field">&#9823</td>-->
+<!--      <td>6</td>-->
+<!--    </tr>-->
+<!--  </table>-->
+
+  <div id="game">
+    <p id="game_id"></p>
+    <canvas id="chess-board" width="800" height="800"></canvas>
+    <p id="waiting">Waiting for another player to join...</p>
+  </div>
+
+  <script src="client/client_script.js"></script>
+</body>
+</html>
