@@ -145,7 +145,8 @@ canvasHTML.addEventListener("mouseup", event => {
     }
 });
 
-const socket = new WebSocket("ws://127.0.0.1:9977");
+// const socket = new WebSocket("ws://127.0.0.1:9977");
+const socket = new WebSocket("ws://4.223.103.5:9977");
 // socket.addEventListener("open", (event) => {
 //     console.log("socket open event: ", event);
 //     let m = {"msg_type": "Join", "room_id": 123, "make_move": [[1,1], [2,2]]}
