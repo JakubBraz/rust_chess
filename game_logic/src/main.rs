@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{current, sleep, spawn};
@@ -10,6 +10,7 @@ use tungstenite::protocol::Role;
 
 use crate::board::{Board, Color, new_board, to_string};
 use crate::communication_protocol::{JsonMsg, JsonMsgServer, MsgType, MsgTypeServer};
+use crate::moves::all_moves;
 
 mod moves;
 mod board;
@@ -31,7 +32,7 @@ fn draw_board(board: &Board) {
 fn thread_game_monitor(boards: Arc<Mutex<HashMap<u32, WebSocket<TcpStream>>>>) {
     loop {
         println!("{:?} - {:?}", current().id(), boards.lock().unwrap().keys());
-        sleep(Duration::from_secs(10));
+        sleep(Duration::from_secs(30));
     }
 }
 
@@ -67,11 +68,16 @@ fn send_new_room(socket: &mut WebSocket<TcpStream>, room_id: u32, is_white: bool
     socket.send(Message::Text(msg)).expect("Cannot send");
 }
 
+fn send_board_update(socket: &mut WebSocket<TcpStream>, board: &Board) {
+    let msg = JsonMsgServer {msg_type: MsgTypeServer::Board, rooms: Vec::new(), board: Some(to_string(board)), room_id: None, color: None };
+    let msg = serde_json::to_string(&msg).expect("Cannot serialize");
+    socket.send(Message::Text(msg)).expect("Cannot send");
+}
+
 fn main() {
     // todo change Mutex to RwLock
     let mut boards: BoardsType = Arc::new(Mutex::new(HashMap::new()));
     let mut clients: Arc<Mutex<HashMap<u32, WebSocket<TcpStream>>>> = Arc::new(Mutex::new(HashMap::new()));
-    // let mut boards: Arc<Mutex<HashMap<u32, Board>>> = Arc::new(Mutex::new(HashMap::new()));
 
     let clients_clone = clients.clone();
     spawn(move || thread_game_monitor(clients_clone));
@@ -168,7 +174,54 @@ fn main() {
                                 send_new_room(ws, board_id, is_white);
                                 println!("Done");
                             }
-                            MsgType::Move => {}
+                            MsgType::Move => {
+                                // todo get room id from memory, not from the message
+                                let room_id = decoded.room_id.expect("Room id must be provided");
+                                let (move_from, move_to) = decoded.make_move.expect("Move must be provided");
+                                let is_legal_move = match boards_clone.lock().expect("Cannot lock").get(&room_id) {
+                                    Some((board, Some(white), Some(black))) => {
+                                        let (white_moves, black_moves) = all_moves(board);
+                                        if *white == client_id && &board.move_history.len() % 2 == 0 {
+                                            match white_moves.get(&move_from) {
+                                                None => false,
+                                                Some(x) => x.contains(&move_to)
+                                            }
+                                        }
+                                        else if *black == client_id && &board.move_history.len() % 2 == 1 {
+                                            match black_moves.get(&move_from) {
+                                                None => false,
+                                                Some(x) => x.contains(&move_to)
+                                            }
+                                        }
+                                        else {
+                                            false
+                                        }
+                                    }
+                                    _ => {
+                                        false
+                                    }
+                                };
+
+                                if is_legal_move {
+                                    let mut board_clients = boards_clone.lock().expect("Cannot lock");
+                                    let (board, white, black) = board_clients.get_mut(&room_id).expect("Board must be provided");
+                                    let piece = board.squares[move_from.0][move_from.1].expect("Move must be legal");
+                                    board.move_history.push((piece, move_from, move_to));
+                                    board.squares[move_from.0][move_from.1] = None;
+                                    board.squares[move_to.0][move_to.1] = Some(piece);
+                                    {
+                                        let mut client_white = clients_clone.lock().expect("Cannot lock");
+                                        let client_white = client_white.get_mut(&white.expect("Must be provided")).expect("Must be provided");
+                                        send_board_update(client_white, board);
+                                    }
+                                    {
+                                        let mut client_black = clients_clone.lock().expect("Cannot lock");
+                                        let client_black = client_black.get_mut(&black.expect("Must be provided")).expect("Must be provided");
+                                        send_board_update(client_black, board);
+                                    }
+                                }
+                                println!("Move done");
+                            }
                         };
 
                         // let server_msg = JsonMsgServer {msg_type: MsgTypeServer::Board, board: Some(to_string(&b)), rooms: Vec::new()};

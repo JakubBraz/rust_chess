@@ -18,6 +18,7 @@ let gameStartedHTML = document.getElementById("waiting");
 let rooms = [];
 let myRoom = 0;
 let myColor = "";
+let square_clicked = [];
 
 let current_board = [
     "        ",
@@ -83,6 +84,9 @@ function click_to_coords(color, x, y) {
     if(color === "white") {
         row = Math.floor((context.canvas.height - y) / SQUARE_HEIGHT);
     }
+    if(color === "black") {
+        col = Math.floor((context.canvas.width - x) / SQUARE_WIDTH);
+    }
     row = Math.min(7, row);
     row = Math.max(0, row);
     col = Math.min(7, col);
@@ -115,12 +119,30 @@ function draw_board() {
     }
 }
 
+canvasHTML.addEventListener("mousedown", event => {
+    if(game_started) {
+        square_clicked = click_to_coords(
+            myColor,
+            event.clientX - canvasHTML.getBoundingClientRect().left,
+            event.clientY - canvasHTML.getBoundingClientRect().top);
+    }
+});
+
 canvasHTML.addEventListener("mouseup", event => {
-    console.log("jest event", event);
-    console.log(click_to_coords(
-        myColor,
-        event.clientX - canvasHTML.getBoundingClientRect().left,
-        event.clientY - canvasHTML.getBoundingClientRect().top))
+    if(game_started) {
+        console.log("jest event", event);
+        let coords = click_to_coords(
+            myColor,
+            event.clientX - canvasHTML.getBoundingClientRect().left,
+            event.clientY - canvasHTML.getBoundingClientRect().top);
+        console.log(coords);
+
+        if (square_clicked[0] !== coords[0] || square_clicked[1] !== coords[1]) {
+            let msg = {"msg_type": "Move", "make_move": [square_clicked, coords], "room_id": myRoom};
+            console.log("Sending: ", msg);
+            socket.send(JSON.stringify(msg));
+        }
+    }
 });
 
 const socket = new WebSocket("ws://127.0.0.1:9977");
@@ -139,7 +161,7 @@ socket.addEventListener("message", event => {
     }
     else if(decoded["msg_type"] === "NewRoom") {
         gameIdHtml.textContent = "Room ID: " + decoded["room_id"];
-        myRoom = decoded["room"];
+        myRoom = decoded["room_id"];
         myColor = decoded["color"];
         in_lobby = false;
     }
