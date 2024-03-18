@@ -5,11 +5,18 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <p>Chess client</p>
-  <p>
+  <div id="lobby">
+    <p>Chess client</p>
     <button id="create_button" onclick="createGameButton()">Create</button>
-    <button id="join_button" onclick="joinGameButton()">Join</button>
-  </p>
+    <table id="rooms">
+      <tr>
+        <td>123</td>
+        <td><button onclick="joinGameButton()">Join</button></td>
+      </tr>
+<!--      <div class="join_button">456<button onclick="joinGameButton()">Join</button></div>-->
+<!--      <div class="join_button">789<button onclick="joinGameButton()">Join</button></div>-->
+    </table>
+  </div>
 
 <!--  <table>-->
 <!--    <tr>-->
@@ -24,7 +31,11 @@
 <!--    </tr>-->
 <!--  </table>-->
 
-  <canvas id="chess-board" width="800" height="800"></canvas>
+  <div id="game">
+    <p id="game_id"></p>
+    <canvas id="chess-board" width="800" height="800"></canvas>
+    <p id="waiting">Waiting for another player to join...</p>
+  </div>
 
   <script src="client_script.js"></script>
 </body>

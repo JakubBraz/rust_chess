@@ -6,7 +6,29 @@ let SQUARE_WIDTH = context.canvas.width / 8;
 let SQUARE_HEIGHT = context.canvas.height / 8;
 console.log(SQUARE_WIDTH, SQUARE_HEIGHT);
 
-let PLAYER_COLOR = "white";
+let in_lobby = true;
+let game_started = false;
+
+let lobbyHTML = document.getElementById("lobby");
+let roomsHTML = document.getElementById("rooms");
+let gameHTML = document.getElementById("game");
+let gameIdHtml = document.getElementById("game_id");
+let gameStartedHTML = document.getElementById("waiting");
+
+let rooms = [];
+let myRoom = 0;
+let myColor = "";
+
+let current_board = [
+    "        ",
+    "        ",
+    "        ",
+    "        ",
+    "        ",
+    "        ",
+    "        ",
+    "        "
+]
 
 let icons = {
     "p": "♟︎",
@@ -18,12 +40,41 @@ let icons = {
     " ": " "
 };
 
+function draw() {
+    if (!in_lobby) {
+        if (game_started) {
+            gameStartedHTML.style.display = "none";
+        }
+        lobbyHTML.style.display = "none";
+        gameHTML.style.display = "block";
+        draw_board();
+    }
+    else {
+        lobbyHTML.style.display = "block";
+        gameHTML.style.display = "none";
+        while(roomsHTML.firstChild) {
+            roomsHTML.removeChild(roomsHTML.firstChild);
+        }
 
-function parse_board(color, boardStr) {
-    console.log(boardStr);
-    let board = boardStr.split("\n");
-    console.log(board);
-    return board;
+        rooms.forEach(room => {
+            let trElement = document.createElement("tr");
+            let td1 = document.createElement("td");
+            td1.textContent = "Room id: " + room;
+            let td2 = document.createElement("td");
+            let button = document.createElement("button");
+            button.onclick = () => joinGameButton(room);
+            button.textContent = "Join";
+
+            trElement.appendChild(td1);
+            td2.appendChild(button);
+            trElement.appendChild(td2);
+            roomsHTML.appendChild(trElement);
+        });
+    }
+}
+
+function parse_board(boardStr) {
+    return boardStr.split("\n");
 }
 
 function click_to_coords(color, x, y) {
@@ -39,12 +90,12 @@ function click_to_coords(color, x, y) {
     return [row, col];
 }
 
-function draw_board(color) {
+function draw_board() {
     let lightColor = '#ddb180';
     let darkColor = '#7c330c';
-    // let useDark = color == "white";
+    let color = myColor;
 
-    let board = parse_board(color, "RNBQKBNR\nPPPPPPPP\n        \n        \n        \n        \npppppppp\nrnbqkbnr");
+    // let board = parse_board(color, "RNBQKBNR\nPPPPPPPP\n        \n        \n        \n        \npppppppp\nrnbqkbnr");
 
     let rowIndices = color == "white" ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
     let colIndices = color == "white" ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
@@ -56,7 +107,7 @@ function draw_board(color) {
             context.fillStyle = row % 2 != col % 2 ? lightColor : darkColor;
             context.fillRect(col_on_screen * SQUARE_WIDTH, row_on_screen * SQUARE_HEIGHT, SQUARE_WIDTH, SQUARE_HEIGHT);
             context.font = "90px Arial";
-            let element = board[row][col];
+            let element = current_board[row][col];
             let piece = icons[element.toLowerCase()];
             context.fillStyle = "prnbqk".includes(element) ? "black" : "white";
             context.fillText(piece, (col_on_screen + 0.05) * SQUARE_WIDTH, (row_on_screen + 0.85) * SQUARE_HEIGHT);
@@ -67,29 +118,49 @@ function draw_board(color) {
 canvasHTML.addEventListener("mouseup", event => {
     console.log("jest event", event);
     console.log(click_to_coords(
-        PLAYER_COLOR,
+        myColor,
         event.clientX - canvasHTML.getBoundingClientRect().left,
         event.clientY - canvasHTML.getBoundingClientRect().top))
 });
 
-draw_board(PLAYER_COLOR);
-
 const socket = new WebSocket("ws://127.0.0.1:9977");
-socket.addEventListener("open", (event) => {
-    console.log("socket open event: ", event);
-    let m = {"msg_type": "Join", "room_id": 123, "make_move": [[1,1], [2,2]]}
-    socket.send(JSON.stringify(m));
-    console.log("message sent");
-});
+// socket.addEventListener("open", (event) => {
+//     console.log("socket open event: ", event);
+//     let m = {"msg_type": "Join", "room_id": 123, "make_move": [[1,1], [2,2]]}
+//     socket.send(JSON.stringify(m));
+//     console.log("message sent");
+// });
 
 socket.addEventListener("message", event => {
     console.log("message received:", event.data);
+    let decoded = JSON.parse(event.data);
+    if(decoded["msg_type"] === "Rooms") {
+        rooms = decoded["rooms"];
+    }
+    else if(decoded["msg_type"] === "NewRoom") {
+        gameIdHtml.textContent = "Room ID: " + decoded["room_id"];
+        myRoom = decoded["room"];
+        myColor = decoded["color"];
+        in_lobby = false;
+    }
+    else if(decoded["msg_type"] === "Board") {
+        game_started = true;
+        current_board = parse_board(decoded["board"]);
+    }
+
+    draw();
 });
 
 function createGameButton() {
-
+    let msg = {"msg_type": "Create"};
+    console.log("sending", msg);
+    socket.send(JSON.stringify(msg));
 }
 
-function joinGameButton() {
-
+function joinGameButton(roomId) {
+    let msg = {"msg_type": "Join", "room_id": roomId};
+    console.log("sending", msg);
+    socket.send(JSON.stringify(msg));
 }
+
+draw();

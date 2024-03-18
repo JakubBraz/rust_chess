@@ -17,6 +17,7 @@ pub enum MsgTypeServer {
     WhiteWon,
     BlackWon,
     Rooms,
+    NewRoom,
 }
 
 #[derive(serde::Serialize)]
@@ -24,4 +25,6 @@ pub struct JsonMsgServer {
     pub msg_type: MsgTypeServer,
     pub rooms: Vec<u32>,
     pub board: Option<String>,
+    pub room_id: Option<u32>,
+    pub color: Option<String>,
 }
