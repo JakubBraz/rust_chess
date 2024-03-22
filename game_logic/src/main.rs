@@ -31,7 +31,7 @@ fn draw_board(board: &Board) {
 // fn thread_game_monitor(boards: Arc<Mutex<HashMap<u32, (Board, Vec<WebSocket<TcpStream>>)>>>) {
 fn thread_game_monitor(boards: Arc<Mutex<HashMap<u32, WebSocket<TcpStream>>>>) {
     loop {
-        println!("{:?} - {:?}", current().id(), boards.lock().unwrap().keys());
+        log::debug!("{:?} - {:?}", current().id(), boards.lock().unwrap().keys());
         sleep(Duration::from_secs(30));
     }
 }
@@ -41,8 +41,15 @@ fn thread_game_monitor(boards: Arc<Mutex<HashMap<u32, WebSocket<TcpStream>>>>) {
 //     boards.insert(number, new_board());
 // }
 
+fn try_send(ws: &mut WebSocket<TcpStream>, msg: String) {
+    match ws.send(Message::Text(msg)) {
+        Ok(_) => log::debug!("Msg sent"),
+        Err(e) => log::error!("Cannot send message, error: {}", e)
+    }
+}
+
 fn broadcast_rooms_message(boards: &BoardsType, clients: &Arc<Mutex<HashMap<u32, WebSocket<TcpStream>>>>) {
-    println!("Sending rooms to every client");
+    log::debug!("Sending rooms to every client");
     let rooms_id: Vec<u32> = boards.lock().expect("Cannot lock").iter()
         .filter(|(room_id, (_, white, black))| white.is_some() ^ black.is_some())
         .map(|(&room_id, (_, _, _))| room_id)
@@ -51,7 +58,7 @@ fn broadcast_rooms_message(boards: &BoardsType, clients: &Arc<Mutex<HashMap<u32,
     let msg = serde_json::to_string(&server_msg).expect("Cannot serialize");
 
     for ws in clients.lock().expect("Cannot lock").values_mut() {
-        ws.send(Message::Text(msg.clone())).expect("Cannot send");
+        try_send(ws, msg.clone());
     }
 }
 
@@ -59,22 +66,25 @@ fn send_board_user(socket: &mut WebSocket<TcpStream>, board: &Board) {
     let str_board = to_string(board);
     let msg = JsonMsgServer { msg_type: MsgTypeServer::Board, rooms: Vec::new(), board: Some(str_board), room_id: None, color: None };
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
-    socket.send(Message::Text(msg)).expect("Cannot send");
+    try_send(socket, msg);
 }
 
 fn send_new_room(socket: &mut WebSocket<TcpStream>, room_id: u32, is_white: bool) {
     let msg = JsonMsgServer { msg_type: MsgTypeServer::NewRoom, rooms: Vec::new(), board: None, room_id: Some(room_id), color: Some(if is_white {"white".to_string()} else {"black".to_string()})};
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
-    socket.send(Message::Text(msg)).expect("Cannot send");
+    try_send(socket, msg);
 }
 
 fn send_board_update(socket: &mut WebSocket<TcpStream>, board: &Board) {
     let msg = JsonMsgServer {msg_type: MsgTypeServer::Board, rooms: Vec::new(), board: Some(to_string(board)), room_id: None, color: None };
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
-    socket.send(Message::Text(msg)).expect("Cannot send");
+    try_send(socket, msg);
 }
 
 fn main() {
+    let logger_env = env_logger::Env::default().filter_or("LOG_LEVEL", "TRACE");
+    env_logger::Builder::from_env(logger_env).format_timestamp_millis().init();
+
     // todo change Mutex to RwLock
     let mut boards: BoardsType = Arc::new(Mutex::new(HashMap::new()));
     let mut clients: Arc<Mutex<HashMap<u32, WebSocket<TcpStream>>>> = Arc::new(Mutex::new(HashMap::new()));
@@ -94,27 +104,27 @@ fn main() {
         let t = spawn(move || {
             let thread_id = current().id();
             broadcast_rooms_message(&boards_clone, &clients_clone);
-            println!("New client");
+            log::debug!("New client");
             loop {
-                println!("Waiting...");
+                log::debug!("Waiting...");
                 let msg = websocket.read().expect("Cannot read message");
 
-                println!("{:?} - Received: {:?}", thread_id, msg);
+                log::debug!("{:?} - Received: {:?}", thread_id, msg);
                 match msg {
                     Message::Text(m) => {
-                        println!("m: {:?}", m);
+                        log::debug!("m: {:?}", m);
                         let decoded: JsonMsg = serde_json::from_str(&m).expect("Cannot decode");
                         // let decoded: Value = serde_json::from_str(&m).expect("Cannot decode");
-                        println!("{:?}", decoded);
+                        log::debug!("{:?}", decoded);
 
                         match decoded.msg_type {
                             MsgType::Join => {
                                 match decoded.room_id {
-                                    None => println!("No room id provided."),
+                                    None => log::debug!("No room id provided."),
                                     Some(room_id) => {
                                         let (board, new_white, new_black) = match boards_clone.lock().expect("Cannot lock").get(&room_id) {
                                             None => {
-                                                println!("Cannot find room {}", room_id);
+                                                log::debug!("Cannot find room {}", room_id);
                                                 (None, None, None)
                                             },
                                             Some((b, white_player, black_player)) => {
@@ -140,13 +150,13 @@ fn main() {
                                             }
                                         };
                                         match board {
-                                            None => {println!("No board found");}
+                                            None => {log::debug!("No board found");}
                                             Some(b) => {
                                                 // println!("join lock remove");
                                                 boards_clone.lock().expect("Cannot lock").remove(&room_id);
                                                 // println!("join remove");
                                                 boards_clone.lock().expect("Cannot lock").insert(room_id, (b, new_white, new_black));
-                                                println!("join done");
+                                                log::debug!("join done");
                                             }
                                         }
                                     }
@@ -157,22 +167,22 @@ fn main() {
                                 let new_board = new_board();
                                 // let ws = WebSocket::from_raw_socket(stream_clone, Role::Server, Some(websocket.get_config().clone()));
                                 let is_white: bool = random();
-                                println!("is white {}", is_white);
+                                log::debug!("is white {}", is_white);
                                 let (white, black) = if is_white {
                                     (Some(client_id), None)
                                 } else {
                                     (None, Some(client_id))
                                 };
-                                println!("Broadcasting");
-                                println!("trying to insert {:?}", (board_id, (&new_board, white, black)));
+                                log::debug!("Broadcasting");
+                                log::debug!("trying to insert {:?}", (board_id, (&new_board, white, black)));
                                 boards_clone.lock().expect("Cannot lock").insert(board_id, (new_board, white, black));
-                                println!("broadcast done");
+                                log::debug!("broadcast done");
 
                                 broadcast_rooms_message(&boards_clone, &clients_clone);
                                 let mut ws = clients_clone.lock().expect("Cannot lock");
                                 let ws = ws.get_mut(&client_id).expect("Cannot find");
                                 send_new_room(ws, board_id, is_white);
-                                println!("Done");
+                                log::debug!("Done");
                             }
                             MsgType::Move => {
                                 // todo get room id from memory, not from the message
@@ -220,7 +230,7 @@ fn main() {
                                         send_board_update(client_black, board);
                                     }
                                 }
-                                println!("Move done");
+                                log::debug!("Move done");
                             }
                         };
 
@@ -228,15 +238,15 @@ fn main() {
                         // let msg = serde_json::to_string(&server_msg).expect("Cannot serialize");
                         // websocket.send(Message::Text(msg)).expect("Cannot send");
                     }
-                    Message::Binary(_) => {println!("binary msg");}
-                    Message::Ping(_) => {println!("ping msg");}
-                    Message::Pong(_) => {println!("pong msg");}
+                    Message::Binary(_) => {log::debug!("binary msg");}
+                    Message::Ping(_) => {log::debug!("ping msg");}
+                    Message::Pong(_) => {log::debug!("pong msg");}
                     Message::Close(_) => {
-                        println!("Closing websocket");
+                        log::debug!("Closing websocket");
                         clients_clone.lock().expect("Cannot lock").remove(&client_id);
                         break;
                     }
-                    Message::Frame(_) => {println!("frame msg");}
+                    Message::Frame(_) => {log::debug!("frame msg");}
                 };
             }
         });
