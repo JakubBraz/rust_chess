@@ -248,7 +248,8 @@ fn main() {
                     Message::Pong(_) => {log::debug!("pong msg");}
                     Message::Close(_) => {
                         log::debug!("Closing websocket");
-                        clients_clone.lock().expect("Cannot lock").remove(&client_id);
+                        // todo proper client removal
+                        // clients_clone.lock().expect("Cannot lock").remove(&client_id);
                         break;
                     }
                     Message::Frame(_) => {log::debug!("frame msg");}
