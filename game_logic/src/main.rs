@@ -146,7 +146,10 @@ fn main() {
                                                         send_board_user(ws, &b);
                                                         (Some(b.clone()), Some(white.clone()), Some(client_id))
                                                     }
-                                                    _ => panic!("Unreachable")
+                                                    _ => {
+                                                        log::warn!("Cannot join full room");
+                                                        (None, None, None)
+                                                    }
                                                 }
                                             }
                                         };
