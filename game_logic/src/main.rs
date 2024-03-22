@@ -92,7 +92,8 @@ fn main() {
     let clients_clone = clients.clone();
     spawn(move || thread_game_monitor(clients_clone));
 
-    let server = TcpListener::bind("127.0.0.1:9977").expect("Cannot create server");
+    // let server = TcpListener::bind("127.0.0.1:9977").expect("Cannot create server");
+    let server = TcpListener::bind("0.0.0.0:9977").expect("Cannot create server");
     for stream in server.incoming() {
         let boards_clone = boards.clone();
         let tcp_stream = stream.expect("Cannot use tcp stream");
