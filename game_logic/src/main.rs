@@ -160,6 +160,7 @@ fn main() {
                                                 boards_clone.lock().expect("Cannot lock").remove(&room_id);
                                                 // println!("join remove");
                                                 boards_clone.lock().expect("Cannot lock").insert(room_id, (b, new_white, new_black));
+                                                broadcast_rooms_message(&boards_clone, &clients_clone);
                                                 log::debug!("join done");
                                             }
                                         }
