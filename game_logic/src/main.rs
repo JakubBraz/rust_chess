@@ -112,7 +112,15 @@ fn main() {
             log::debug!("New client");
             loop {
                 log::debug!("Waiting...");
-                let msg = websocket.read().expect("Cannot read message");
+                let msg = match websocket.read() {
+                    Ok(m) => m,
+                    Err(e) => {
+                        log::error!("Cannot read websocket, error: {}", e);
+                        log::error!("Sending disconnect to channel and shutting down thread");
+                        sender.send(ChannelMsg::Disconnect(client_id)).expect("Cannot send to channel, disconnect");
+                        return;
+                    }
+                };
 
                 log::debug!("{:?} - Received: {:?}", thread_id, msg);
                 match msg {
