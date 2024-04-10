@@ -14,6 +14,7 @@ pub enum ChannelMsg {
     NewConnection(u32, WebSocket<TcpStream>),
     Msg(u32, JsonMsg),
     Disconnect(u32),
+    ValueMonitor,
 }
 
 pub fn handle_game(receiver: Receiver<ChannelMsg>) {
@@ -141,7 +142,29 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                 };
             }
 
-            ChannelMsg::Disconnect(_) => {}
+            ChannelMsg::Disconnect(client_id) => {
+                log::debug!("Removing client {}", client_id);
+                clients.remove(&client_id);
+                // todo store board_id in clients instead of searching it
+                // todo disconnect both websockets, notify players about game disconnect and game result
+                let ids: Vec<u32> = boards.iter()
+                    .filter_map(|(&board_id, (_b, white_id, black_id))|
+                        if white_id.is_some() && white_id.unwrap() == client_id || black_id.is_some() && black_id.unwrap() == client_id { Some(board_id) } else { None })
+                    .collect();
+                for id in ids {
+                    log::debug!("Removing {}", id);
+                    boards.remove(&id);
+                }
+            }
+
+            ChannelMsg::ValueMonitor => {
+                log::info!("Clients: {}", clients.len());
+                log::info!("{:?}", clients.keys());
+                log::info!("Boards: {}", boards.len());
+                for (board_id, (_b, white, black)) in &boards {
+                    log::info!("({} - ({:?}, {:?}))", board_id, white, black);
+                }
+            }
         }
     }
 }

@@ -33,10 +33,10 @@ fn draw_board(board: &Board) {
 }
 
 // fn thread_game_monitor(boards: Arc<Mutex<HashMap<u32, (Board, Vec<WebSocket<TcpStream>>)>>>) {
-fn thread_game_monitor(boards: Arc<Mutex<HashMap<u32, WebSocket<TcpStream>>>>) {
+fn thread_game_monitor(sender: Sender<ChannelMsg>) {
     loop {
-        log::debug!("{:?} - {:?}", current().id(), boards.lock().unwrap().keys());
-        sleep(Duration::from_secs(30));
+        sender.send(ChannelMsg::ValueMonitor).expect("Cannot send to channel");
+        sleep(Duration::from_secs(60));
     }
 }
 
@@ -89,12 +89,10 @@ fn main() {
     let logger_env = env_logger::Env::default().filter_or("LOG_LEVEL", "TRACE");
     env_logger::Builder::from_env(logger_env).format_timestamp_millis().init();
 
-    // todo fix thread monitor
-    // let clients_clone = clients.clone();
-    // spawn(move || thread_game_monitor(clients_clone));
-
     let (sender_origin, receiver): (Sender<ChannelMsg>, Receiver<ChannelMsg>) = channel();
 
+    let monitor_sender = sender_origin.clone();
+    spawn(|| thread_game_monitor(monitor_sender));
     spawn(|| game_server::handle_game(receiver));
 
     // let server = TcpListener::bind("127.0.0.1:9977").expect("Cannot create server");
@@ -129,8 +127,7 @@ fn main() {
                     Message::Pong(_) => { log::debug!("pong msg"); }
                     Message::Close(_) => {
                         log::debug!("Closing websocket");
-                        // todo proper client removal, there is already a ChannelMsg enum value for it
-                        // clients_clone.lock().expect("Cannot lock").remove(&client_id);
+                        sender.send(ChannelMsg::Disconnect(client_id)).expect("Cannot send to channel, disconnect");
                         break;
                     }
                     Message::Frame(_) => { log::debug!("frame msg"); }
