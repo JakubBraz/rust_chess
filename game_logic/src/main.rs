@@ -6,7 +6,8 @@ use std::thread::{current, sleep, spawn};
 use std::time::Duration;
 
 use rand::random;
-use tungstenite::{accept, Message, WebSocket};
+use tungstenite::{accept, HandshakeError, Message, ServerHandshake, WebSocket};
+use tungstenite::handshake::server::NoCallback;
 use tungstenite::protocol::Role;
 
 use crate::board::{Board, Color, new_board, to_string};
@@ -101,7 +102,13 @@ fn main() {
         let sender = sender_origin.clone();
         let tcp_stream = stream.expect("Cannot use tcp stream");
         let tcp_stream_clone = tcp_stream.try_clone().expect("Cannot clone");
-        let mut websocket = accept(tcp_stream).expect("Cannot create websocket");
+        let mut websocket = match accept(tcp_stream) {
+            Ok(w) => w,
+            Err(e) => {
+                log::error!("Cannot create websocket: {}", e);
+                continue
+            }
+        };
         let ws_clone = WebSocket::from_raw_socket(tcp_stream_clone, Role::Server, Some(websocket.get_config().clone()));
         let client_id: u32 = random();
 

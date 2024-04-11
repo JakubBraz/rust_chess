@@ -143,6 +143,9 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
             }
 
             ChannelMsg::Disconnect(client_id) => {
+                // todo removing elements from hashMap leaves the second player's thread working in the background, eventually a timout closes it manual socket disconnect is needed for resource saving
+                // todo or maybe even better, set new server response, like "error", or "game ended", if client receive it, it closes websocket
+                // todo this way a consistency would be persevered, only client initiate websocket disconnect
                 log::debug!("Removing client {}", client_id);
                 clients.remove(&client_id);
                 // todo store board_id in clients instead of searching it
