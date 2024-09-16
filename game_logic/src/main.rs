@@ -13,7 +13,6 @@ use tungstenite::protocol::Role;
 use crate::board::{Board, Color, new_board, to_string};
 use crate::communication_protocol::{JsonMsg, JsonMsgServer, MsgType, MsgTypeServer};
 use crate::game_server::ChannelMsg;
-use crate::moves::all_moves;
 
 mod moves;
 mod board;

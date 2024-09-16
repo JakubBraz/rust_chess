@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use crate::board::{Board, Color, HEIGHT, PieceType, WIDTH};
+use crate::board::{Board, Color, HEIGHT, PieceType, WIDTH, Piece};
 use crate::Color::{Black, White};
 
 const START_RANK_WHITE: usize = 1;
@@ -34,12 +34,9 @@ fn move_by_vector(board: &Board, vec: &[i8; 2], row: usize, col: usize, current_
         let new_col = n_col as usize;
         match board.squares[new_row][new_col] {
             None => result.push((new_row, new_col)),
-            Some(p) => match p.color == *current_color {
-                true => break,
-                false => {
-                    result.push((new_row, new_col));
-                    break;
-                }
+            Some(p) => {
+                result.push((new_row, new_col));
+                if p.kind != PieceType::King { break }
             }
         }
         n_row += vec[0];
@@ -48,11 +45,23 @@ fn move_by_vector(board: &Board, vec: &[i8; 2], row: usize, col: usize, current_
     result
 }
 
-// pub fn all_moves() -> [[Option<Vec<(usize, usize)>>; WIDTH]; HEIGHT] {
-//     []
-// }
+pub fn legal_moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
+    let moves = potential_moves(board, row, col);
+    let current_color = match board.squares[row][col] {
+        None => return HashSet::new(),
+        Some(piece) => piece.color,
+    };
+    moves.iter()
+        .filter_map(|&(r, c)| {
+            match board.squares[r][c] {
+                None => Some((r, c)),
+                Some(dest_piece) => (dest_piece.color != current_color).then_some((r, c))
+            }
+        })
+        .collect()
+}
 
-pub fn moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
+fn potential_moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
     let i_row = row as i8;
     let i_col = col as i8;
     match board.squares[row][col] {
@@ -78,10 +87,6 @@ pub fn moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
                 potential_moves.iter()
                     .filter(|(r, c)| *r >= 0 && *c >= 0 && *r < HEIGHT as i8 && *c < WIDTH as i8)
                     .map(|&(r, c)| (r as usize, c as usize))
-                    .filter(|(r, c)| match board.squares[*r][*c] {
-                        None => true,
-                        Some(new_p) => new_p.color != p.color
-                    })
                     .collect()
             }
             PieceType::Pawn => {
@@ -114,7 +119,7 @@ pub fn moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
                                         last_stop.0 == row
                             }
                         },
-                        Some(piece) => piece.color != p.color
+                        Some(piece) => true
                     })
                     .collect();
 
@@ -124,60 +129,76 @@ pub fn moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
     }
 }
 
-pub fn king_moves(board: &Board, all_opponent_moves: &HashMap<(usize, usize), HashSet<(usize, usize)>>, row: usize, col: usize) -> HashSet<(usize, usize)> {
-    let attacked_squares: HashSet<(usize, usize)> = all_opponent_moves.iter()
-        .filter(|(&(row, col), _)| board.squares[row][col].unwrap().kind != PieceType::Pawn)
-        .flat_map(|(_, m)| m)
-        .copied()
+pub fn allowed_moves(board: &Board, row: usize, col: usize, color: Color) -> HashSet<(usize, usize)> {
+    match board.squares[row][col] {
+        None => HashSet::new(),
+        Some(piece) => if piece.color != color {
+            HashSet::new()
+        }
+        else {
+            match piece.kind {
+                PieceType::King => {
+                    let opponent_color = if color == White { Black } else { White };
+                    let all_opponent_moves = &all_potential_attacks(board)[&opponent_color];
+                    legal_moves(board, row, col).iter()
+                        .filter(|&&(r, c)| !all_opponent_moves.contains(&(r, c)))
+                        .copied()
+                        .collect()
+                }
+                _ => legal_moves(board, row, col)
+            }
+        }
+    }
+}
+
+fn filter_attacks_by_color(board: &Board, occupied_squares: &Vec<(Color, usize, usize)>, to_find: Color) -> HashSet<(usize, usize)> {
+    let one_color: Vec<(usize, usize)> = occupied_squares.iter()
+        .filter_map(|&(color, r, c)| (color == to_find).then_some((r, c)))
         .collect();
-    let pawn_attacks: HashSet<(usize, usize)> = all_opponent_moves.iter()
-        .filter_map(|(&(row, col), possible_moves)| {
-            if board.squares[row][col].unwrap().kind == PieceType::Pawn {
-                let final_row: i8 = if board.squares[row][col].unwrap().color == White { row as i8 + 1 } else { row as i8 - 1 };
-                let pawn_attacks: Vec<(usize, usize)> = [(col as i8) - 1, (col as i8) + 1].iter()
-                    .filter(|&&c| c > 0 && c < WIDTH as i8)
-                    .map(|&c| (final_row as usize, c as usize))
-                    .collect();
-                Some( pawn_attacks )
-            }
-            else {
-                None
-            }
+    let attacks: HashSet<(usize, usize)> = one_color.iter()
+        .filter(|&&(r, c)| board.squares[r][c].expect("Must be present").kind != PieceType::Pawn)
+        .flat_map(|&(row, col)| potential_moves(board, row, col))
+        .collect();
+    let pawn_attacks: HashSet<(usize, usize)> = one_color.iter()
+        .filter(|&&(r, c)| board.squares[r][c].expect("Must be present").kind == PieceType::Pawn)
+        .flat_map(|&(row, col)| {
+            let new_row: i8 = match to_find {
+                White => row as i8 + 1,
+                Black => row as i8 - 1,
+            };
+            let attacked_squares: HashSet<(usize, usize)> = [(new_row, col as i8 - 1), (new_row, col as i8 + 1)].iter()
+                .filter_map(|&(r, c)| (c > 0 && c < WIDTH as i8).then_some((r as usize, c as usize)) )
+                .collect();
+            attacked_squares
         })
-        .flat_map(|x| x)
         .collect();
-    moves(board, row, col).difference(&(&attacked_squares | &pawn_attacks)).copied().collect()
+    &attacks | &pawn_attacks
 }
 
-fn filter_by_color(board: &Board, occupied_squares: &Vec<(Color, usize, usize)>, to_find: Color) -> HashMap<(usize, usize), HashSet<(usize, usize)>> {
-    occupied_squares.iter().
-        filter(|(color, _, _)| *color == to_find)
-        .map(|&(_, row, col)| ((row, col), moves(board, row, col)))
-        .collect()
-}
-
-pub fn all_moves(board: &Board) -> (HashMap<(usize, usize), HashSet<(usize, usize)>>, HashMap<(usize, usize), HashSet<(usize, usize)>>) {
+fn all_potential_attacks(board: &Board) -> HashMap<Color, HashSet<(usize, usize)>> {
     let occupied_squares: Vec<(Color, usize, usize)> = (0..HEIGHT).into_iter()
         .flat_map(|r| (0..WIDTH).into_iter().map(move |c| (r, c)))
         .filter(|(r, c)| board.squares[*r][*c].is_some())
         .map(|(r, c)| (board.squares[r][c].unwrap().color, r, c))
         .collect();
-    let white_moves = filter_by_color(board, &occupied_squares, White);
-    let black_moves = filter_by_color(board, &occupied_squares, Black);
-    (white_moves, black_moves)
+    HashMap::from([
+        (White, filter_attacks_by_color(board, &occupied_squares, White)),
+        (Black, filter_attacks_by_color(board, &occupied_squares, Black)),
+    ])
 }
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
     use crate::board::{Board, Color, HEIGHT, new_board, Piece, PieceType, WIDTH};
     use crate::Color::{Black, White};
-    use crate::moves::{all_moves, king_moves, moves};
+    use crate::moves::{legal_moves, all_potential_attacks, allowed_moves};
 
     fn board_one_piece(row: usize, col: usize, color: Color, kind: PieceType) -> Board {
         let mut board = Board{
             squares: [[None; WIDTH]; HEIGHT],
-            move_history: Vec::new()
+            move_history: Vec::new(),
+            king_positions: if kind == PieceType::King { HashMap::from([(color, (row, col))]) } else { HashMap::new() }
         };
         board.squares[row][col] = Some(Piece {color, kind});
         board
@@ -186,8 +207,17 @@ mod test {
     #[test]
     fn test_empty_squares() {
         let board = board_one_piece(0, 0, Color::White, PieceType::King);
-        let empty_moves = moves(&board, 1, 1);
+        let empty_moves = legal_moves(&board, 1, 1);
         assert_eq!(empty_moves, HashSet::new());
+    }
+
+    #[test]
+    fn all_moves_go_through_king_piece() {
+        let mut board = board_one_piece(4, 4, White, PieceType::King);
+        board.squares[0][4] = Some(Piece {color: Black, kind: PieceType::Queen});
+        board.squares[0][0] = Some(Piece {color: Black, kind: PieceType::Bishop});
+        let king = allowed_moves(&board, 4, 4, White);
+        assert_eq!(king, HashSet::from([(3, 5), (4, 3), (4, 5), (5, 3)]));
     }
 
     #[test]
@@ -196,59 +226,67 @@ mod test {
         board.squares[0][3] = Some(Piece{color: Black, kind: PieceType::Rook});
         board.squares[7][5] = Some(Piece{color: Black, kind: PieceType::Rook});
         board.squares[2][4] = Some(Piece{color: Black, kind: PieceType::King});
-        let (_, all_moves_black) = all_moves(&board);
-        let actual_moves = king_moves(&board, &all_moves_black, 4, 4);
+        let actual_moves = allowed_moves(&board, 4, 4, White);
         assert_eq!(actual_moves, HashSet::from([(5, 4)]));
 
         let mut board = board_one_piece(4, 4, White, PieceType::King);
         board.squares[6][4] = Some(Piece{color: Black, kind: PieceType::Pawn});
-        let (_, all_moves_black) = all_moves(&board);
-        let actual_moves = king_moves(&board, &all_moves_black, 4, 4);
+        let all_moves_black = &all_potential_attacks(&board)[&Black];
+        let actual_moves = allowed_moves(&board, 4, 4, White);
         assert_eq!(actual_moves, HashSet::from([(3, 3), (3, 4), (3, 5), (4, 3), (4, 5), (5, 4)]));
+
+        let mut board = board_one_piece(4, 4, White, PieceType::King);
+        board.squares[5][4] = Some(Piece{color: Black, kind: PieceType::Queen});
+        board.squares[7][3] = Some(Piece{color: Black, kind: PieceType::Knight});
+        board.squares[3][3] = Some(Piece{color: Black, kind: PieceType::Knight});
+        board.squares[4][2] = Some(Piece{color: Black, kind: PieceType::Pawn});
+        let all_moves_black = &all_potential_attacks(&board)[&Black];
+        let actual_moves = allowed_moves(&board, 4, 4, White);
+        assert_eq!(actual_moves, HashSet::from([(3, 5)]));
     }
 
     #[test]
     fn test_king_moves() {
         let board = board_one_piece(0, 0, Color::White, PieceType::King);
-        let king_moves = moves(&board, 0, 0);
+        let king_moves = legal_moves(&board, 0, 0);
         assert_eq!(king_moves, HashSet::from([(0, 1), (1, 0), (1, 1)]));
 
         let board = board_one_piece(7, 7, Color::White, PieceType::King);
-        let king_moves = moves(&board, 7, 7);
+        let king_moves = legal_moves(&board, 7, 7);
         assert_eq!(king_moves, HashSet::from([(6, 6), (6, 7), (7, 6)]));
 
         let board = board_one_piece(3, 3, Color::White, PieceType::King);
-        let king_moves = moves(&board, 3, 3);
+        let king_moves = legal_moves(&board, 3, 3);
         assert_eq!(king_moves, HashSet::from([(2, 2), (2, 3), (2, 4), (3, 2), (3, 4), (4, 2), (4, 3), (4, 4)]));
     }
 
     #[test]
     fn test_rook_moves() {
         let board = board_one_piece(0, 0, Color::White, PieceType::Rook);
-        let actual_moves = moves(&board, 0, 0);
-        assert_eq!(actual_moves, HashSet::from([
+        let moves = legal_moves(&board, 0, 0);
+        assert_eq!(moves, HashSet::from([
             (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0),
             (0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7)
         ]));
 
         let board = new_board();
-        let actual_moves = moves(&board, 0, 0);
-        assert_eq!(actual_moves, HashSet::new());
+        let moves = legal_moves(&board, 0, 0);
+        assert_eq!(moves, HashSet::new());
 
         let mut board = new_board();
         board.squares[1][7] = None;
-        let actual_moves = moves(&board, 0, 7);
-        assert_eq!(actual_moves, HashSet::from([(1, 7), (2, 7), (3, 7), (4, 7), (5, 7), (6, 7)]));
+        let moves = legal_moves(&board, 0, 7);
+        assert_eq!(moves, HashSet::from([(1, 7), (2, 7), (3, 7), (4, 7), (5, 7), (6, 7)]));
     }
 
     #[test]
     fn test_bishop_moves() {
         let board = board_one_piece(0, 0, Color::White, PieceType::Bishop);
-        let actual_moves = moves(&board, 0, 0);
+        let actual_moves = legal_moves(&board, 0, 0);
         assert_eq!(actual_moves, HashSet::from([(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)]));
 
         let board = board_one_piece(3, 3, Color::White, PieceType::Bishop);
-        let actual_moves = moves(&board, 3, 3);
+        let actual_moves = legal_moves(&board, 3, 3);
         assert_eq!(actual_moves, HashSet::from([
             (4, 4), (5, 5), (6, 6), (7, 7),
             (2, 4), (1, 5), (0, 6),
@@ -257,7 +295,7 @@ mod test {
         ]));
 
         let board = board_one_piece(5, 1, Color::White, PieceType::Bishop);
-        let actual_moves = moves(&board, 5, 1);
+        let actual_moves = legal_moves(&board, 5, 1);
         assert_eq!(actual_moves, HashSet::from([
             (6, 2), (7, 3),
             (4, 2), (3, 3), (2, 4), (1, 5), (0, 6),
@@ -266,14 +304,14 @@ mod test {
         ]));
 
         let board = new_board();
-        let actual_moves = moves(&board, 0, 2);
+        let actual_moves = legal_moves(&board, 0, 2);
         assert_eq!(actual_moves, HashSet::new());
     }
 
     #[test]
     fn test_queen_moves() {
         let board = board_one_piece(4, 2, Color::White, PieceType::Queen);
-        let actual_moves = moves(&board, 4, 2);
+        let actual_moves = legal_moves(&board, 4, 2);
         assert_eq!(actual_moves, HashSet::from([
             (5, 2), (6, 2), (7, 2),
             (3, 2), (2, 2), (1, 2), (0, 2),
@@ -286,7 +324,7 @@ mod test {
         ]));
 
         let board = new_board();
-        let actual_moves = moves(&board, 0, 3);
+        let actual_moves = legal_moves(&board, 0, 3);
         assert_eq!(actual_moves, HashSet::new());
 
         let mut board = new_board();
@@ -295,7 +333,7 @@ mod test {
         board.squares[1][4] = None;
         board.squares[4][7] = Some(Piece{color: White, kind: PieceType::Pawn});
         board.squares[3][0] = Some(Piece{color: Black, kind: PieceType::Pawn});
-        let actual_moves = moves(&board, 0, 3);
+        let actual_moves = legal_moves(&board, 0, 3);
         assert_eq!(actual_moves, HashSet::from([
             (1, 3), (2, 3), (3, 3), (4, 3), (5, 3), (6, 3),
             (1, 4), (2, 5), (3, 6),
@@ -306,16 +344,16 @@ mod test {
     #[test]
     fn test_knight_moves() {
         let board = new_board();
-        let actual_moves = moves(&board, 0, 1);
+        let actual_moves = legal_moves(&board, 0, 1);
         assert_eq!(actual_moves, HashSet::from([(2, 0), (2, 2)]));
 
         let mut board = board_one_piece(7, 0, Color::White, PieceType::Knight);
         board.squares[5][1] = Some(Piece{color: Black, kind: PieceType::Queen});
-        let actual_moves = moves(&board, 7, 0);
+        let actual_moves = legal_moves(&board, 7, 0);
         assert_eq!(actual_moves, HashSet::from([(6, 2), (5, 1)]));
 
         let board = board_one_piece(5, 5, Color::White, PieceType::Knight);
-        let actual_moves = moves(&board, 5, 5);
+        let actual_moves = legal_moves(&board, 5, 5);
         assert_eq!(actual_moves, HashSet::from([
             (7, 4), (7, 6), (4, 7), (6, 7),
             (3, 4), (3, 6), (4, 3), (6, 3)
@@ -325,31 +363,31 @@ mod test {
     #[test]
     fn test_pawn_moves() {
         let board = new_board();
-        let actual_moves = moves(&board, 1, 0);
+        let actual_moves = legal_moves(&board, 1, 0);
         assert_eq!(actual_moves, HashSet::from([(2, 0), (3, 0)]));
 
-        let actual_moves = moves(&board, 6, 6);
+        let actual_moves = legal_moves(&board, 6, 6);
         assert_eq!(actual_moves, HashSet::from([(5, 6), (4, 6)]));
 
         let board = board_one_piece(6, 1, Color::White, PieceType::Pawn);
-        let actual_moves = moves(&board, 6, 1);
+        let actual_moves = legal_moves(&board, 6, 1);
         assert_eq!(actual_moves, HashSet::from([(7, 1)]));
 
         let board = board_one_piece(6, 1, Color::Black, PieceType::Pawn);
-        let actual_moves = moves(&board, 6, 1);
+        let actual_moves = legal_moves(&board, 6, 1);
         assert_eq!(actual_moves, HashSet::from([(4, 1), (5, 1)]));
 
         let mut board = board_one_piece(3, 3, Color::Black, PieceType::Pawn);
         board.squares[2][2] = Some(Piece{color: White, kind: PieceType::Pawn});
         board.squares[2][3] = Some(Piece{color: White, kind: PieceType::Pawn});
         board.squares[2][4] = Some(Piece{color: White, kind: PieceType::Pawn});
-        let actual_moves = moves(&board, 3, 3);
+        let actual_moves = legal_moves(&board, 3, 3);
         assert_eq!(actual_moves, HashSet::from([(2, 2), (2, 4)]));
 
         let mut board = board_one_piece(4, 4, Color::White, PieceType::Pawn);
         board.squares[4][3] = Some(Piece{color: Black, kind: PieceType::Pawn});
         board.move_history = vec![(Piece{color: Black, kind: PieceType::Pawn}, (6, 3), (4, 3))];
-        let actual_moves = moves(&board, 4, 4);
+        let actual_moves = legal_moves(&board, 4, 4);
         assert_eq!(actual_moves, HashSet::from([(5, 4), (5, 3)]));
     }
 }

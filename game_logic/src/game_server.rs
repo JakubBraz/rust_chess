@@ -1,14 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::TcpStream;
 use std::sync::mpsc::Receiver;
 use rand::random;
 use tungstenite::WebSocket;
 use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_board_user, send_new_room};
+use crate::board::Color::{Black, White};
 use crate::board::new_board;
 use crate::board::PieceType::King;
 use crate::communication_protocol::{JsonMsg, MsgType};
-use crate::moves::{all_moves, king_moves};
-
+use crate::moves::allowed_moves;
 
 #[derive(Debug)]
 pub enum ChannelMsg {
@@ -107,29 +107,15 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                         let (move_from, move_to) = decoded.make_move.expect("Move must be provided");
                         let is_legal_move = match boards.get(&room_id) {
                             Some((board, Some(white), Some(black))) => {
-                                let (white_moves, black_moves) = all_moves(board);
-                                let (my_moves, opponent_moves) =
-                                    if *white == websocket_id && &board.move_history.len() % 2 == 0 {
-                                        (white_moves, black_moves)
-                                    } else if *black == websocket_id && &board.move_history.len() % 2 == 1 {
-                                        (black_moves, white_moves)
-                                    } else {
-                                        log::debug!("bad move");
-                                        return;
-                                    };
-                                match my_moves.get(&move_from) {
-                                    None => false,
-                                    Some(current_moves) => {
-                                        let (row, col) = move_from;
-                                        let actual_moves = if board.squares[row][col].unwrap().kind == King {
-                                            king_moves(board, &opponent_moves, row, col)
-                                        }
-                                        else {
-                                            current_moves.to_owned()
-                                        };
-                                        actual_moves.contains(&move_to)
+                                let player_color = match websocket_id {
+                                    x if x == *white => White,
+                                    x if x == *black => Black,
+                                    x => {
+                                        log::warn!("Unexpected websocket id: {}", {x});
+                                        White
                                     }
-                                }
+                                };
+                                allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
                             }
                             _ => false
                         };
@@ -140,6 +126,7 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                             board.move_history.push((piece, move_from, move_to));
                             board.squares[move_from.0][move_from.1] = None;
                             board.squares[move_to.0][move_to.1] = Some(piece);
+                            board.king_positions.insert(piece.color, move_to);
                             let client_white = clients.get_mut(&white.expect("Must be provided")).expect("Must be provided");
                             send_board_update(client_white, board);
                             let client_black = clients.get_mut(&black.expect("Must be provided")).expect("Must be provided");

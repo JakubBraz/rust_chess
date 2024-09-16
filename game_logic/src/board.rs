@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use serde::{Serializer};
 
 pub const WIDTH: usize = 8;
@@ -13,7 +14,7 @@ pub enum PieceType {
     Pawn,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Color {
     White, Black
 }
@@ -33,7 +34,8 @@ impl Piece {
 #[derive(Debug, Clone)]
 pub struct Board {
     pub squares: [[Option<Piece>; WIDTH]; HEIGHT],
-    pub move_history: Vec<(Piece, (usize, usize), (usize, usize))>
+    pub move_history: Vec<(Piece, (usize, usize), (usize, usize))>,
+    pub king_positions: HashMap<Color, (usize, usize)>
 }
 
 pub fn to_string(board: &Board) -> String {
@@ -97,5 +99,7 @@ pub fn new_board() -> Board {
         new_pawns(Color::Black),
         new_pieces(Color::Black)
     ],
-        move_history: Vec::new()}
+        move_history: Vec::new(),
+        king_positions: HashMap::from([(Color::White, (0, 4)), (Color::Black, (7, 4))])
+    }
 }
