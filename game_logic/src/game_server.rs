@@ -5,8 +5,9 @@ use rand::random;
 use tungstenite::WebSocket;
 use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_board_user, send_new_room};
 use crate::board::new_board;
+use crate::board::PieceType::King;
 use crate::communication_protocol::{JsonMsg, MsgType};
-use crate::moves::all_moves;
+use crate::moves::{all_moves, king_moves};
 
 
 #[derive(Debug)]
@@ -107,23 +108,30 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                         let is_legal_move = match boards.get(&room_id) {
                             Some((board, Some(white), Some(black))) => {
                                 let (white_moves, black_moves) = all_moves(board);
-                                if *white == websocket_id && &board.move_history.len() % 2 == 0 {
-                                    match white_moves.get(&move_from) {
-                                        None => false,
-                                        Some(x) => x.contains(&move_to)
+                                let (my_moves, opponent_moves) =
+                                    if *white == websocket_id && &board.move_history.len() % 2 == 0 {
+                                        (white_moves, black_moves)
+                                    } else if *black == websocket_id && &board.move_history.len() % 2 == 1 {
+                                        (black_moves, white_moves)
+                                    } else {
+                                        log::debug!("bad move");
+                                        return;
+                                    };
+                                match my_moves.get(&move_from) {
+                                    None => false,
+                                    Some(current_moves) => {
+                                        let (row, col) = move_from;
+                                        let actual_moves = if board.squares[row][col].unwrap().kind == King {
+                                            king_moves(board, &opponent_moves, row, col)
+                                        }
+                                        else {
+                                            current_moves.to_owned()
+                                        };
+                                        actual_moves.contains(&move_to)
                                     }
-                                } else if *black == websocket_id && &board.move_history.len() % 2 == 1 {
-                                    match black_moves.get(&move_from) {
-                                        None => false,
-                                        Some(x) => x.contains(&move_to)
-                                    }
-                                } else {
-                                    false
                                 }
                             }
-                            _ => {
-                                false
-                            }
+                            _ => false
                         };
 
                         if is_legal_move {

@@ -124,12 +124,29 @@ pub fn moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
     }
 }
 
-pub fn king_moves(board: &Board, all_moves: &HashMap<(usize, usize), HashSet<(usize, usize)>>, row: usize, col: usize) -> HashSet<(usize, usize)> {
-    let attacked_squares: HashSet<(usize, usize)> = all_moves.iter()
+pub fn king_moves(board: &Board, all_opponent_moves: &HashMap<(usize, usize), HashSet<(usize, usize)>>, row: usize, col: usize) -> HashSet<(usize, usize)> {
+    let attacked_squares: HashSet<(usize, usize)> = all_opponent_moves.iter()
+        .filter(|(&(row, col), _)| board.squares[row][col].unwrap().kind != PieceType::Pawn)
         .flat_map(|(_, m)| m)
         .copied()
         .collect();
-    moves(board, row, col).difference(&attacked_squares).copied().collect()
+    let pawn_attacks: HashSet<(usize, usize)> = all_opponent_moves.iter()
+        .filter_map(|(&(row, col), possible_moves)| {
+            if board.squares[row][col].unwrap().kind == PieceType::Pawn {
+                let final_row: i8 = if board.squares[row][col].unwrap().color == White { row as i8 + 1 } else { row as i8 - 1 };
+                let pawn_attacks: Vec<(usize, usize)> = [(col as i8) - 1, (col as i8) + 1].iter()
+                    .filter(|&&c| c > 0 && c < WIDTH as i8)
+                    .map(|&c| (final_row as usize, c as usize))
+                    .collect();
+                Some( pawn_attacks )
+            }
+            else {
+                None
+            }
+        })
+        .flat_map(|x| x)
+        .collect();
+    moves(board, row, col).difference(&(&attacked_squares | &pawn_attacks)).copied().collect()
 }
 
 fn filter_by_color(board: &Board, occupied_squares: &Vec<(Color, usize, usize)>, to_find: Color) -> HashMap<(usize, usize), HashSet<(usize, usize)>> {
@@ -182,6 +199,12 @@ mod test {
         let (_, all_moves_black) = all_moves(&board);
         let actual_moves = king_moves(&board, &all_moves_black, 4, 4);
         assert_eq!(actual_moves, HashSet::from([(5, 4)]));
+
+        let mut board = board_one_piece(4, 4, White, PieceType::King);
+        board.squares[6][4] = Some(Piece{color: Black, kind: PieceType::Pawn});
+        let (_, all_moves_black) = all_moves(&board);
+        let actual_moves = king_moves(&board, &all_moves_black, 4, 4);
+        assert_eq!(actual_moves, HashSet::from([(3, 3), (3, 4), (3, 5), (4, 3), (4, 5), (5, 4)]));
     }
 
     #[test]
