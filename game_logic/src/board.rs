@@ -20,7 +20,17 @@ pub enum Color {
     White, Black
 }
 
-#[derive(Debug, Copy, Clone)]
+impl Color {
+    pub fn opposite(&self) -> Color {
+        if self == &Color::White {
+            Color::Black
+        } else {
+            Color::White
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Piece {
     pub color: Color,
     pub kind: PieceType

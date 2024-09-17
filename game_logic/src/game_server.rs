@@ -5,7 +5,7 @@ use rand::random;
 use tungstenite::WebSocket;
 use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_board_user, send_new_room, send_possible_moves};
 use crate::board::Color::{Black, White};
-use crate::board::{new_board, Color};
+use crate::board::{new_board, Color, PieceType};
 use crate::board::PieceType::King;
 use crate::communication_protocol::{JsonMsg, MsgType};
 use crate::moves::allowed_moves;
@@ -112,7 +112,8 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                                         White
                                     }
                                 };
-                                board.color_to_play() == player_color && allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
+                                // board.color_to_play() == player_color && allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
+                                allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
                             }
                             _ => false
                         };
@@ -123,7 +124,17 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                             board.move_history.push((piece, move_from, move_to));
                             board.squares[move_from.0][move_from.1] = None;
                             board.squares[move_to.0][move_to.1] = Some(piece);
-                            board.king_positions.insert(piece.color, move_to);
+                            if piece.kind == King {
+                                board.king_positions.insert(piece.color, move_to);
+                                if move_from.0 == move_to.0 && move_to.1 + 3 == move_from.1 {
+                                    board.squares[move_from.0][2] = board.squares[move_from.0][0];
+                                    board.squares[move_from.0][0] = None;
+                                }
+                                else if move_from.0 == move_to.0 && move_from.1 + 2 == move_to.1 {
+                                    board.squares[move_from.0][5] = board.squares[move_from.0][7];
+                                    board.squares[move_from.0][7] = None;
+                                }
+                            }
                             let client_white = clients.get_mut(&white.expect("Must be provided")).expect("Must be provided");
                             send_board_update(client_white, board);
                             let client_black = clients.get_mut(&black.expect("Must be provided")).expect("Must be provided");

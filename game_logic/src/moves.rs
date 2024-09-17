@@ -34,9 +34,9 @@ fn move_by_vector(board: &Board, vec: &[i8; 2], row: usize, col: usize, current_
         let new_col = n_col as usize;
         match board.squares[new_row][new_col] {
             None => result.push((new_row, new_col)),
-            Some(p) => {
+            Some(_) => {
                 result.push((new_row, new_col));
-                if p.kind != PieceType::King { break }
+                break
             }
         }
         n_row += vec[0];
@@ -61,6 +61,13 @@ pub fn legal_moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usi
         .collect()
 }
 
+fn castle_rooks(color: Color) -> ((usize, usize), (usize, usize)) {
+    match color {
+        White => ((0, 0), (0, 7)),
+        Black => ((7, 0), (7, 7)),
+    }
+}
+
 fn potential_moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usize)> {
     let i_row = row as i8;
     let i_col = col as i8;
@@ -68,7 +75,6 @@ fn potential_moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usi
         None => HashSet::new(),
         Some(p) => match p.kind {
             PieceType::King => {
-                // todo implement castle move
                 let result = [move_straight(board, row, col), move_diagonally(board, row, col)].concat();
                 result.into_iter()
                     .map(|(r, c)| (r as i8, c as i8))
@@ -130,25 +136,51 @@ fn potential_moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usi
 }
 
 pub fn allowed_moves(board: &Board, row: usize, col: usize, color: Color) -> HashSet<(usize, usize)> {
-    match board.squares[row][col] {
-        None => HashSet::new(),
-        Some(piece) => if piece.color != color {
-            HashSet::new()
-        }
-        else {
-            match piece.kind {
-                PieceType::King => {
-                    let opponent_color = if color == White { Black } else { White };
-                    let all_opponent_moves = &all_potential_attacks(board)[&opponent_color];
-                    legal_moves(board, row, col).iter()
-                        .filter(|&&(r, c)| !all_opponent_moves.contains(&(r, c)))
-                        .copied()
-                        .collect()
-                }
-                _ => legal_moves(board, row, col)
+    let (moves, moving_piece) = match board.squares[row][col] {
+        None => (HashSet::new(), PieceType::Pawn),
+        Some(piece) =>
+            if piece.color != color {
+                (HashSet::new(), PieceType::Pawn)
             }
+            else {
+                match piece.kind {
+                    PieceType::King => {
+                        let mut moves = legal_moves(board, row, col);
+                        let under_attack = &all_potential_attacks(board)[&piece.color.opposite()];
+                        if !board.move_history.iter().any(|&(p, _, _)| piece == p) {
+                            let (long_castle, short_castle) = castle_rooks(piece.color);
+                            if !board.move_history.iter().any(|&(_, from, _)| from == long_castle) {
+                                let squares = [(row, col), (row, col - 1), (row, col - 2)];
+                                if board.squares[row][col - 1].is_none() &&
+                                    board.squares[row][col - 2].is_none() &&
+                                    board.squares[row][col - 3].is_none() && !squares.iter().any(|x| under_attack.contains(x)) {
+                                    moves.insert((row, col - 3));
+                                }
+                            }
+                            if !board.move_history.iter().any(|&(_, from, _)| from == short_castle) {
+                                if board.squares[row][col + 1].is_none() &&
+                                    board.squares[row][col + 2].is_none() &&
+                                    ![(row, col), (row, col + 1)].iter().any(|x| under_attack.contains(x)) {
+                                    moves.insert((row, col + 2));
+                                }
+                            }
+                        }
+                        (moves, piece.kind)
+                    },
+                    _ => (legal_moves(board, row, col), piece.kind)
+                }
+            }
+    };
+
+    moves.iter().filter(|&&(r, c)| {
+        let mut new_board = board.clone();
+        new_board.squares[r][c] = board.squares[row][col];
+        new_board.squares[row][col] = None;
+        if moving_piece == PieceType::King {
+            new_board.king_positions.insert(color, (r, c));
         }
-    }
+        !all_potential_attacks(&new_board)[&color.opposite()].contains(&new_board.king_positions[&color])
+    }).copied().collect()
 }
 
 fn filter_attacks_by_color(board: &Board, occupied_squares: &Vec<(Color, usize, usize)>, to_find: Color) -> HashSet<(usize, usize)> {
@@ -230,6 +262,7 @@ mod test {
         assert_eq!(actual_moves, HashSet::from([(5, 4)]));
 
         let mut board = board_one_piece(4, 4, White, PieceType::King);
+        board.move_history.push((Piece {color: White, kind: PieceType::King}, (0, 4), (0, 5)));
         board.squares[6][4] = Some(Piece{color: Black, kind: PieceType::Pawn});
         let all_moves_black = &all_potential_attacks(&board)[&Black];
         let actual_moves = allowed_moves(&board, 4, 4, White);
