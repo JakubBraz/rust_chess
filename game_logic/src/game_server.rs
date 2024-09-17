@@ -3,9 +3,9 @@ use std::net::TcpStream;
 use std::sync::mpsc::Receiver;
 use rand::random;
 use tungstenite::WebSocket;
-use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_board_user, send_new_room};
+use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_board_user, send_new_room, send_possible_moves};
 use crate::board::Color::{Black, White};
-use crate::board::new_board;
+use crate::board::{new_board, Color};
 use crate::board::PieceType::King;
 use crate::communication_protocol::{JsonMsg, MsgType};
 use crate::moves::allowed_moves;
@@ -20,6 +20,7 @@ pub enum ChannelMsg {
 
 pub fn handle_game(receiver: Receiver<ChannelMsg>) {
     let mut boards: BoardsType = HashMap::new();
+    //todo move white_id and black_id out of the "boards" variable, set them on JOIN message
     let mut clients: HashMap<u32, WebSocket<TcpStream>> = HashMap::new();
 
     loop {
@@ -37,46 +38,42 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                 let mut websocket = clients.get_mut(&websocket_id).expect("Cannot find client");
                 match decoded.msg_type {
                     MsgType::Join => {
-                        match decoded.room_id {
-                            None => log::debug!("No room id provided."),
-                            Some(room_id) => {
-                                let (board, new_white, new_black) = match boards.get(&room_id) {
-                                    None => {
-                                        log::debug!("Cannot find room {}", room_id);
+                        let room_id = decoded.room_id;
+                        let (board, new_white, new_black) = match boards.get(&room_id) {
+                            None => {
+                                log::debug!("Cannot find room {}", room_id);
+                                (None, None, None)
+                            }
+                            Some((b, white_player, black_player)) => {
+                                match (white_player, black_player) {
+                                    (None, Some(black)) => {
+                                        send_new_room(websocket, room_id, true);
+                                        send_board_user(websocket, &b);
+                                        let ws = clients.get_mut(black).expect("Cannot get");
+                                        send_board_user(ws, &b);
+                                        (Some(b.clone()), Some(websocket_id), Some(black.clone()))
+                                    }
+                                    (Some(white), None) => {
+                                        send_new_room(websocket, room_id, false);
+                                        send_board_user(websocket, &b);
+                                        let ws = clients.get_mut(white).expect("Cannot get");
+                                        send_board_user(ws, &b);
+                                        (Some(b.clone()), Some(white.clone()), Some(websocket_id))
+                                    }
+                                    _ => {
+                                        log::warn!("Cannot join full room");
                                         (None, None, None)
                                     }
-                                    Some((b, white_player, black_player)) => {
-                                        match (white_player, black_player) {
-                                            (None, Some(black)) => {
-                                                send_new_room(websocket, room_id, true);
-                                                send_board_user(websocket, &b);
-                                                let ws = clients.get_mut(black).expect("Cannot get");
-                                                send_board_user(ws, &b);
-                                                (Some(b.clone()), Some(websocket_id), Some(black.clone()))
-                                            }
-                                            (Some(white), None) => {
-                                                send_new_room(websocket, room_id, false);
-                                                send_board_user(websocket, &b);
-                                                let ws = clients.get_mut(white).expect("Cannot get");
-                                                send_board_user(ws, &b);
-                                                (Some(b.clone()), Some(white.clone()), Some(websocket_id))
-                                            }
-                                            _ => {
-                                                log::warn!("Cannot join full room");
-                                                (None, None, None)
-                                            }
-                                        }
-                                    }
-                                };
-                                match board {
-                                    None => { log::debug!("No board found"); }
-                                    Some(b) => {
-                                        boards.remove(&room_id);
-                                        boards.insert(room_id, (b, new_white, new_black));
-                                        broadcast_rooms_message(&boards, &mut clients);
-                                        log::debug!("join done");
-                                    }
                                 }
+                            }
+                        };
+                        match board {
+                            None => { log::debug!("No board found"); }
+                            Some(b) => {
+                                boards.remove(&room_id);
+                                boards.insert(room_id, (b, new_white, new_black));
+                                broadcast_rooms_message(&boards, &mut clients);
+                                log::debug!("join done");
                             }
                         }
                     }
@@ -103,7 +100,7 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                     }
                     MsgType::Move => {
                         // todo get room id from memory, not from the message
-                        let room_id = decoded.room_id.expect("Room id must be provided");
+                        let room_id = decoded.room_id;
                         let (move_from, move_to) = decoded.make_move.expect("Move must be provided");
                         let is_legal_move = match boards.get(&room_id) {
                             Some((board, Some(white), Some(black))) => {
@@ -115,7 +112,7 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                                         White
                                     }
                                 };
-                                allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
+                                board.color_to_play() == player_color && allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
                             }
                             _ => false
                         };
@@ -133,6 +130,21 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                             send_board_update(client_black, board);
                         }
                         log::debug!("Move done");
+                    }
+                    MsgType::Possible => {
+                        match decoded.possible_moves {
+                            None => {}
+                            Some((row, col)) => {
+                                match boards.get(&decoded.room_id) {
+                                    Some((board, Some(white_id), Some(black_id))) => {
+                                        let my_color = get_player_color(websocket_id, *white_id, *black_id);
+                                        let moves = allowed_moves(&board, row, col, my_color);
+                                        send_possible_moves(clients.get_mut(&websocket_id).expect("Must be provided"), moves);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        };
                     }
                 };
             }
@@ -164,5 +176,18 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                 }
             }
         }
+    }
+}
+
+fn get_player_color(websocket_id: u32, white_id: u32, black_id: u32) -> Color {
+    if websocket_id == white_id {
+        White
+    }
+    else if websocket_id == black_id {
+        Black
+    }
+    else {
+        log::warn!("Cannot find player color, websocket_id: {}", websocket_id);
+        White
     }
 }

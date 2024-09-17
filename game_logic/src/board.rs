@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use serde::{Serializer};
+use crate::board::Color::{Black, White};
 
 pub const WIDTH: usize = 8;
 pub const HEIGHT: usize = 8;
@@ -36,6 +37,12 @@ pub struct Board {
     pub squares: [[Option<Piece>; WIDTH]; HEIGHT],
     pub move_history: Vec<(Piece, (usize, usize), (usize, usize))>,
     pub king_positions: HashMap<Color, (usize, usize)>
+}
+
+impl Board {
+    pub fn color_to_play(&self) -> Color {
+        if self.move_history.len() % 2 == 0 { White } else { Black }
+    }
 }
 
 pub fn to_string(board: &Board) -> String {

@@ -5,6 +5,10 @@ let context = canvasHTML.getContext("2d");
 let SQUARE_WIDTH = context.canvas.width / 8;
 let SQUARE_HEIGHT = context.canvas.height / 8;
 console.log(SQUARE_WIDTH, SQUARE_HEIGHT);
+let LINE_SIZE = SQUARE_WIDTH * 0.075;
+let LINE_LEN = SQUARE_HEIGHT * 0.2;
+// let LINE_OFFSET = LINE_SIZE * 5;
+let LINE_OFFSET = LINE_SIZE;
 
 let in_lobby = true;
 let game_started = false;
@@ -19,6 +23,7 @@ let rooms = [];
 let myRoom = 0;
 let myColor = "";
 let square_clicked = [];
+let possible_moves = [];
 
 let current_board = [
     "        ",
@@ -99,49 +104,71 @@ function draw_board() {
     let darkColor = '#7c330c';
     let color = myColor;
 
-    // let board = parse_board(color, "RNBQKBNR\nPPPPPPPP\n        \n        \n        \n        \npppppppp\nrnbqkbnr");
+    let rowIndices = color === "white" ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+    let colIndices = color === "white" ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
 
-    let rowIndices = color == "white" ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
-    let colIndices = color == "white" ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
-
-    for (let row_on_screen= 0; row_on_screen < 8; row_on_screen++) {
+    for (let row_on_screen = 0; row_on_screen < 8; row_on_screen++) {
         let row = rowIndices[row_on_screen];
         for (let col_on_screen = 0; col_on_screen < 8; col_on_screen++) {
             let col = colIndices[col_on_screen];
-            context.fillStyle = row % 2 != col % 2 ? lightColor : darkColor;
+            context.fillStyle = row % 2 !== col % 2 ? lightColor : darkColor;
             context.fillRect(col_on_screen * SQUARE_WIDTH, row_on_screen * SQUARE_HEIGHT, SQUARE_WIDTH, SQUARE_HEIGHT);
             context.font = "90px Arial";
             let element = current_board[row][col];
             let piece = icons[element.toLowerCase()];
             context.fillStyle = "prnbqk".includes(element) ? "black" : "white";
             context.fillText(piece, (col_on_screen + 0.05) * SQUARE_WIDTH, (row_on_screen + 0.85) * SQUARE_HEIGHT);
+            if (possible_moves.some(x => x[0] === row && x[1] === col)) {
+                draw_attacked_field(row_on_screen, col_on_screen);
+            }
         }
     }
 }
 
+function draw_attacked_field(row_on_screen, col_on_screen) {
+    let line_size = 0.3;
+    context.fillStyle = "#2fae01";
+    context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_SIZE, LINE_LEN);
+    context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_LEN, LINE_SIZE);
+
+    context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_SIZE - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_SIZE, LINE_LEN);
+    context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_LEN - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_LEN, LINE_SIZE);
+
+    context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_LEN - LINE_OFFSET, LINE_SIZE, LINE_LEN);
+    context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_SIZE - LINE_OFFSET, LINE_LEN, LINE_SIZE);
+
+    context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_SIZE - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_LEN - LINE_OFFSET, LINE_SIZE, LINE_LEN);
+    context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_LEN - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_SIZE - LINE_OFFSET, LINE_LEN, LINE_SIZE);
+}
+
 canvasHTML.addEventListener("mousedown", event => {
     if(game_started) {
-        square_clicked = click_to_coords(
+        let coords = click_to_coords(
             myColor,
             event.clientX - canvasHTML.getBoundingClientRect().left,
             event.clientY - canvasHTML.getBoundingClientRect().top);
+        if (is_move_possible(coords)) {
+            make_move(square_clicked, coords);
+        }
+        else {
+            start_move(coords);
+        }
+        square_clicked = coords;
+        draw();
     }
 });
 
 canvasHTML.addEventListener("mouseup", event => {
     if(game_started) {
-        console.log("jest event", event);
         let coords = click_to_coords(
             myColor,
             event.clientX - canvasHTML.getBoundingClientRect().left,
             event.clientY - canvasHTML.getBoundingClientRect().top);
-        console.log(coords);
 
-        if (square_clicked[0] !== coords[0] || square_clicked[1] !== coords[1]) {
-            let msg = {"msg_type": "Move", "make_move": [square_clicked, coords], "room_id": myRoom};
-            console.log("Sending: ", msg);
-            socket.send(JSON.stringify(msg));
+        if (!compare_arrays(coords, square_clicked)) {
+            make_move(square_clicked, coords);
         }
+        draw();
     }
 });
 
@@ -163,13 +190,17 @@ socket.addEventListener("message", event => {
     else if(decoded["msg_type"] === "Board") {
         game_started = true;
         current_board = parse_board(decoded["board"]);
+        cancel_move();
+    }
+    else if(decoded["msg_type"] === "Possible") {
+        possible_moves = decoded["possible_moves"];
     }
 
     draw();
 });
 
 function createGameButton() {
-    let msg = {"msg_type": "Create"};
+    let msg = {"msg_type": "Create", "room_id": 0};
     console.log("sending", msg);
     socket.send(JSON.stringify(msg));
 }
@@ -178,6 +209,44 @@ function joinGameButton(roomId) {
     let msg = {"msg_type": "Join", "room_id": roomId};
     console.log("sending", msg);
     socket.send(JSON.stringify(msg));
+}
+
+function compare_arrays(a, b) {
+    if (a.length !== b.length) {
+        return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function make_move(first_click, second_click) {
+    if (first_click.length === 2 && second_click.length === 2) {
+        let msg = {"msg_type": "Move", "make_move": [first_click, second_click], "room_id": myRoom};
+        console.log("Sending: ", msg);
+        socket.send(JSON.stringify(msg));
+        cancel_move();
+    }
+}
+
+function start_move(coords) {
+    let msg = {"msg_type": "Possible", "room_id": myRoom, "possible_moves": coords};
+    socket.send(JSON.stringify(msg));
+}
+
+function cancel_move() {
+    possible_moves = [];
+}
+
+function is_move_possible(coords) {
+    return possible_moves.some(a => compare_arrays(a, coords));
+}
+
+function is_move_active() {
+    return possible_moves.length > 0;
 }
 
 draw();

@@ -1,13 +1,16 @@
+use std::collections::HashSet;
+
 #[derive(Debug, serde::Deserialize)]
 pub enum MsgType {
-    Join, Create, Move
+    Join, Create, Move, Possible
 }
 
 #[derive(Debug, serde::Deserialize)]
 pub struct JsonMsg {
     pub msg_type: MsgType,
-    pub room_id: Option<u32>,
-    pub make_move: Option<((usize, usize), (usize, usize))>
+    pub room_id: u32,
+    pub make_move: Option<((usize, usize), (usize, usize))>,
+    pub possible_moves: Option<(usize, usize)>,
 }
 
 #[derive(serde::Serialize)]
@@ -17,6 +20,7 @@ pub enum MsgTypeServer {
     BlackWon,
     Rooms,
     NewRoom,
+    Possible,
 }
 
 #[derive(serde::Serialize)]
@@ -26,4 +30,5 @@ pub struct JsonMsgServer {
     pub board: Option<String>,
     pub room_id: Option<u32>,
     pub color: Option<String>,
+    pub possible_moves: HashSet<(usize, usize)>,
 }
