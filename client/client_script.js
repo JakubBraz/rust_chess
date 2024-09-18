@@ -186,8 +186,10 @@ function make_move(first_click, second_click) {
 }
 
 function start_move(coords) {
-    let msg = {"msg_type": "Possible", "room_id": myRoom, "possible_moves": coords};
-    socket.send(JSON.stringify(msg));
+    if (!is_game_over) {
+        let msg = {"msg_type": "Possible", "room_id": myRoom, "possible_moves": coords};
+        socket.send(JSON.stringify(msg));
+    }
 }
 
 function cancel_move() {
