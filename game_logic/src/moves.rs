@@ -244,7 +244,27 @@ mod test {
     }
 
     #[test]
-    fn all_moves_go_through_king_piece() {
+    fn test_castling() {
+        let mut board = board_one_piece(0, 4, Color::White, PieceType::King);
+        board.squares[0][0] = Some(Piece {color: White, kind: PieceType::Rook});
+        board.squares[0][7] = Some(Piece {color: White, kind: PieceType::Rook});
+        let moves = allowed_moves(&board, 0, 4, White);
+        assert_eq!(moves.contains(&(0, 1)), true);
+        assert_eq!(moves.contains(&(0, 6)), true);
+
+        board.squares[7][5] = Some(Piece {color: Black, kind: PieceType::Rook});
+        let moves = allowed_moves(&board, 0, 4, White);
+        assert_eq!(moves.contains(&(0, 1)), true);
+        assert_eq!(moves.contains(&(0, 6)), false);
+
+        board.squares[7][4] = Some(Piece {color: Black, kind: PieceType::Rook});
+        let moves = allowed_moves(&board, 0, 4, White);
+        assert_eq!(moves.contains(&(0, 1)), false);
+        assert_eq!(moves.contains(&(0, 6)), false);
+    }
+
+    #[test]
+    fn test_king_check() {
         let mut board = board_one_piece(4, 4, White, PieceType::King);
         board.squares[0][4] = Some(Piece {color: Black, kind: PieceType::Queen});
         board.squares[0][0] = Some(Piece {color: Black, kind: PieceType::Bishop});
