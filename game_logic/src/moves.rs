@@ -111,7 +111,7 @@ fn potential_moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usi
                         Vec::new()
                     };
                 let moves_capturing: Vec<(usize, usize)> = [(move_one, i_col - 1), (move_one, i_col + 1)].iter()
-                    .filter(|(r, c)| *r >= 0 && *c >=0 && *r < HEIGHT as i8 && *c < WIDTH as i8)
+                    .filter(|(r, c)| *r >= 0 && *c >= 0 && *r < HEIGHT as i8 && *c < WIDTH as i8)
                     .map(|(r, c)| (*r as usize, *c as usize))
                     .filter(|(r, c)| match board.squares[*r][*c] {
                         None => {
@@ -125,7 +125,7 @@ fn potential_moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usi
                                         last_stop.0 == row
                             }
                         },
-                        Some(piece) => true
+                        Some(_) => true
                     })
                     .collect();
 
@@ -199,7 +199,7 @@ fn filter_attacks_by_color(board: &Board, occupied_squares: &Vec<(Color, usize, 
                 Black => row as i8 - 1,
             };
             let attacked_squares: HashSet<(usize, usize)> = [(new_row, col as i8 - 1), (new_row, col as i8 + 1)].iter()
-                .filter_map(|&(r, c)| (c > 0 && c < WIDTH as i8).then_some((r as usize, c as usize)) )
+                .filter_map(|&(r, c)| (c >= 0 && c < WIDTH as i8).then_some((r as usize, c as usize)) )
                 .collect();
             attacked_squares
         })
@@ -296,6 +296,12 @@ mod test {
         let all_moves_black = &all_potential_attacks(&board)[&Black];
         let actual_moves = allowed_moves(&board, 4, 4, White);
         assert_eq!(actual_moves, HashSet::from([(3, 5)]));
+
+        let mut board = board_one_piece(3, 1, White, PieceType::King);
+        board.squares[5][1] = Some(Piece{color: Black, kind: PieceType::Pawn});
+        board.move_history.push((board.squares[3][1].unwrap(), (2, 1), (3, 1)));
+        let actual_moves = allowed_moves(&board, 3, 1, White);
+        assert_eq!(actual_moves.contains(&(4, 0)), false);
     }
 
     #[test]
