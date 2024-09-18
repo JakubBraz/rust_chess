@@ -251,8 +251,9 @@ fn check_mate(board: &Board, color: &Color) -> GameStatus {
             GameStatus::Win(color.opposite())
         }
     }
-    else if all_potential_moves(board)[color].iter()
-        .any(|&(r, c)| !allowed_moves(board, r, c, *color).is_empty()) {
+    else if (0..HEIGHT)
+        .flat_map(|r| (0..WIDTH).map(move |c| (r, c)))
+        .any(|(r, c)| !allowed_moves(board, r, c, *color).is_empty()) {
         GameStatus::InProgress
     }
     else {
@@ -263,9 +264,9 @@ fn check_mate(board: &Board, color: &Color) -> GameStatus {
 #[cfg(test)]
 mod test {
     use std::collections::{HashMap, HashSet};
-    use crate::board::{Board, Color, HEIGHT, new_board, Piece, PieceType, WIDTH};
+    use crate::board::{Board, Color, HEIGHT, new_board, Piece, PieceType, WIDTH, GameStatus};
     use crate::Color::{Black, White};
-    use crate::moves::{legal_moves, all_potential_attacks, allowed_moves, all_potential_moves};
+    use crate::moves::{legal_moves, all_potential_attacks, allowed_moves, all_potential_moves, game_result};
 
     fn board_one_piece(row: usize, col: usize, color: Color, kind: PieceType) -> Board {
         let mut board = Board{
@@ -282,6 +283,24 @@ mod test {
         let board = board_one_piece(0, 0, Color::White, PieceType::King);
         let empty_moves = legal_moves(&board, 1, 1);
         assert_eq!(empty_moves, HashSet::new());
+    }
+
+    #[test]
+    fn test_check_mate() {
+        let mut board = board_one_piece(1, 0, White, PieceType::Pawn);
+        board.squares[1][2] = Some(Piece {color: White, kind: PieceType::Pawn});
+        board.squares[3][1] = Some(Piece {color: White, kind: PieceType::Pawn});
+        board.squares[3][7] = Some(Piece {color: White, kind: PieceType::Pawn});
+        board.squares[5][0] = Some(Piece {color: Black, kind: PieceType::Pawn});
+        board.squares[5][6] = Some(Piece {color: Black, kind: PieceType::Pawn});
+        board.squares[6][1] = Some(Piece {color: Black, kind: PieceType::Pawn});
+        board.squares[4][3] = Some(Piece {color: Black, kind: PieceType::Rook});
+        board.squares[7][5] = Some(Piece {color: Black, kind: PieceType::Rook});
+        board.squares[6][6] = Some(Piece {color: Black, kind: PieceType::King});
+        board.squares[6][4] = Some(Piece {color: White, kind: PieceType::King});
+        board.king_positions = HashMap::from([(Color::White, (6, 4)), (Black, (6, 6))]);
+        let result = game_result(&board);
+        assert_eq!(result, GameStatus::InProgress);
     }
 
     #[test]

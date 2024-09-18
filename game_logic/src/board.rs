@@ -30,7 +30,7 @@ impl Color {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum GameStatus {
     InProgress,
     Win(Color),
