@@ -16,8 +16,9 @@ pub struct JsonMsg {
 #[derive(serde::Serialize)]
 pub enum MsgTypeServer {
     Board,
-    WhiteWon,
-    BlackWon,
+    GameResultWhiteWon,
+    GameResultBlackWon,
+    GameResultDraw,
     Rooms,
     NewRoom,
     Possible,

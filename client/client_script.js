@@ -1,4 +1,5 @@
-console.log("script start!");
+// const socket = new WebSocket("ws://127.0.0.1:9977");
+const socket = new WebSocket("ws://4.223.103.5:9977");
 
 let canvasHTML = document.getElementById("chess-board");
 let context = canvasHTML.getContext("2d");
@@ -18,12 +19,16 @@ let roomsHTML = document.getElementById("rooms");
 let gameHTML = document.getElementById("game");
 let gameIdHtml = document.getElementById("game_id");
 let gameStartedHTML = document.getElementById("waiting");
+let postGameHTML = document.getElementById("post_game");
+let winnerTextHTML = document.getElementById("winner_text");
 
 let rooms = [];
 let myRoom = 0;
 let myColor = "";
 let square_clicked = [];
 let possible_moves = [];
+
+let is_game_over = false;
 
 let current_board = [
     "        ",
@@ -53,6 +58,12 @@ function draw() {
         }
         lobbyHTML.style.display = "none";
         gameHTML.style.display = "block";
+        if (is_game_over) {
+            postGameHTML.style.display = "block";
+        }
+        else {
+            postGameHTML.style.display = "none";
+        }
         draw_board();
     }
     else {
@@ -141,64 +152,6 @@ function draw_attacked_field(row_on_screen, col_on_screen) {
     context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_LEN - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_SIZE - LINE_OFFSET, LINE_LEN, LINE_SIZE);
 }
 
-canvasHTML.addEventListener("mousedown", event => {
-    if(game_started) {
-        let coords = click_to_coords(
-            myColor,
-            event.clientX - canvasHTML.getBoundingClientRect().left,
-            event.clientY - canvasHTML.getBoundingClientRect().top);
-        if (is_move_possible(coords)) {
-            make_move(square_clicked, coords);
-        }
-        else {
-            start_move(coords);
-        }
-        square_clicked = coords;
-        draw();
-    }
-});
-
-canvasHTML.addEventListener("mouseup", event => {
-    if(game_started) {
-        let coords = click_to_coords(
-            myColor,
-            event.clientX - canvasHTML.getBoundingClientRect().left,
-            event.clientY - canvasHTML.getBoundingClientRect().top);
-
-        if (!compare_arrays(coords, square_clicked)) {
-            make_move(square_clicked, coords);
-        }
-        draw();
-    }
-});
-
-const socket = new WebSocket("ws://127.0.0.1:9977");
-// const socket = new WebSocket("ws://4.223.103.5:9977");
-
-socket.addEventListener("message", event => {
-    console.log("message received:", event.data);
-    let decoded = JSON.parse(event.data);
-    if(decoded["msg_type"] === "Rooms") {
-        rooms = decoded["rooms"];
-    }
-    else if(decoded["msg_type"] === "NewRoom") {
-        gameIdHtml.textContent = "Room ID: " + decoded["room_id"];
-        myRoom = decoded["room_id"];
-        myColor = decoded["color"];
-        in_lobby = false;
-    }
-    else if(decoded["msg_type"] === "Board") {
-        game_started = true;
-        current_board = parse_board(decoded["board"]);
-        cancel_move();
-    }
-    else if(decoded["msg_type"] === "Possible") {
-        possible_moves = decoded["possible_moves"];
-    }
-
-    draw();
-});
-
 function createGameButton() {
     let msg = {"msg_type": "Create", "room_id": 0};
     console.log("sending", msg);
@@ -245,8 +198,71 @@ function is_move_possible(coords) {
     return possible_moves.some(a => compare_arrays(a, coords));
 }
 
-function is_move_active() {
-    return possible_moves.length > 0;
-}
+canvasHTML.addEventListener("mousedown", event => {
+    if(game_started) {
+        let coords = click_to_coords(
+            myColor,
+            event.clientX - canvasHTML.getBoundingClientRect().left,
+            event.clientY - canvasHTML.getBoundingClientRect().top);
+        if (is_move_possible(coords)) {
+            make_move(square_clicked, coords);
+        }
+        else {
+            start_move(coords);
+        }
+        square_clicked = coords;
+        draw();
+    }
+});
+
+canvasHTML.addEventListener("mouseup", event => {
+    if(game_started) {
+        let coords = click_to_coords(
+            myColor,
+            event.clientX - canvasHTML.getBoundingClientRect().left,
+            event.clientY - canvasHTML.getBoundingClientRect().top);
+
+        if (!compare_arrays(coords, square_clicked)) {
+            make_move(square_clicked, coords);
+        }
+        draw();
+    }
+});
+
+socket.addEventListener("message", event => {
+    console.log("message received:", event.data);
+    let decoded = JSON.parse(event.data);
+    if(decoded["msg_type"] === "Rooms") {
+        rooms = decoded["rooms"];
+    }
+    else if(decoded["msg_type"] === "NewRoom") {
+        gameIdHtml.textContent = "Room ID: " + decoded["room_id"];
+        myRoom = decoded["room_id"];
+        myColor = decoded["color"];
+        in_lobby = false;
+    }
+    else if(decoded["msg_type"] === "Board") {
+        game_started = true;
+        current_board = parse_board(decoded["board"]);
+        cancel_move();
+    }
+    else if(decoded["msg_type"] === "Possible") {
+        possible_moves = decoded["possible_moves"];
+    }
+    else if(decoded["msg_type"] === "GameResultWhiteWon") {
+        winnerTextHTML.textContent = "Game over, white won!";
+        is_game_over = true;
+    }
+    else if(decoded["msg_type"] === "GameResultBlackWon") {
+        winnerTextHTML.textContent = "Game over, black won!";
+        is_game_over = true;
+    }
+    else if(decoded["msg_type"] === "GameResultDraw") {
+        winnerTextHTML.textContent = "Game over, draw!";
+        is_game_over = true;
+    }
+
+    draw();
+});
 
 draw();

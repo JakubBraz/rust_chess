@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use crate::board::{Board, Color, HEIGHT, PieceType, WIDTH, Piece};
+use crate::board::{Board, Color, HEIGHT, PieceType, WIDTH, Piece, GameStatus};
 use crate::Color::{Black, White};
 
 const START_RANK_WHITE: usize = 1;
@@ -174,21 +174,17 @@ pub fn allowed_moves(board: &Board, row: usize, col: usize, color: Color) -> Has
 
     moves.iter().filter(|&&(r, c)| {
         let mut new_board = board.clone();
-        new_board.squares[r][c] = board.squares[row][col];
-        new_board.squares[row][col] = None;
-        if moving_piece == PieceType::King {
-            new_board.king_positions.insert(color, (r, c));
-        }
+        new_board.make_move((row, col), (r, c));
         !all_potential_attacks(&new_board)[&color.opposite()].contains(&new_board.king_positions[&color])
     }).copied().collect()
 }
 
-fn filter_attacks_by_color(board: &Board, occupied_squares: &Vec<(Color, usize, usize)>, to_find: Color) -> HashSet<(usize, usize)> {
+fn filter_moves_by_color(board: &Board, occupied_squares: &Vec<(Color, usize, usize)>, to_find: Color, only_attacks: bool) -> HashSet<(usize, usize)> {
     let one_color: Vec<(usize, usize)> = occupied_squares.iter()
         .filter_map(|&(color, r, c)| (color == to_find).then_some((r, c)))
         .collect();
     let attacks: HashSet<(usize, usize)> = one_color.iter()
-        .filter(|&&(r, c)| board.squares[r][c].expect("Must be present").kind != PieceType::Pawn)
+        .filter(|&&(r, c)| !only_attacks || board.squares[r][c].expect("Must be present").kind != PieceType::Pawn)
         .flat_map(|&(row, col)| potential_moves(board, row, col))
         .collect();
     let pawn_attacks: HashSet<(usize, usize)> = one_color.iter()
@@ -207,16 +203,61 @@ fn filter_attacks_by_color(board: &Board, occupied_squares: &Vec<(Color, usize, 
     &attacks | &pawn_attacks
 }
 
-fn all_potential_attacks(board: &Board) -> HashMap<Color, HashSet<(usize, usize)>> {
+fn all_attacks_moves(board: &Board, only_attacks: bool) -> HashMap<Color, HashSet<(usize, usize)>> {
     let occupied_squares: Vec<(Color, usize, usize)> = (0..HEIGHT).into_iter()
         .flat_map(|r| (0..WIDTH).into_iter().map(move |c| (r, c)))
         .filter(|(r, c)| board.squares[*r][*c].is_some())
         .map(|(r, c)| (board.squares[r][c].unwrap().color, r, c))
         .collect();
     HashMap::from([
-        (White, filter_attacks_by_color(board, &occupied_squares, White)),
-        (Black, filter_attacks_by_color(board, &occupied_squares, Black)),
+        (White, filter_moves_by_color(board, &occupied_squares, White, only_attacks)),
+        (Black, filter_moves_by_color(board, &occupied_squares, Black, only_attacks)),
     ])
+}
+
+pub fn all_potential_attacks(board: &Board) -> HashMap<Color, HashSet<(usize, usize)>> {
+    all_attacks_moves(board, true)
+}
+
+pub fn all_potential_moves(board: &Board) -> HashMap<Color, HashSet<(usize, usize)>> {
+    all_attacks_moves(board, false)
+}
+
+pub fn game_result(board: &Board) -> GameStatus {
+    let white_result = check_mate(board, &White);
+    if white_result == GameStatus::InProgress {
+        check_mate(board, &Black)
+    }
+    else {
+        white_result
+    }
+}
+
+fn check_mate(board: &Board, color: &Color) -> GameStatus {
+    let king = board.king_positions[color];
+    if all_potential_attacks(board)[&color.opposite()].contains(&king) {
+        if (0..HEIGHT)
+            .flat_map(|col| (0..WIDTH).map(move |row| (row, col)))
+            .filter(|&(r, c)| board.squares[r][c].is_some_and(|x| x.color == *color))
+            .flat_map(|(r, c)| allowed_moves(board, r, c, *color).into_iter().map(move |(nr, nc)| ((r, c), (nr, nc))))
+            .any(|((move_from), (move_to))| {
+                let mut new_board = board.clone();
+                new_board.make_move(move_from, move_to);
+                !all_potential_attacks(&new_board)[&color.opposite()].contains(&new_board.king_positions[&color])
+            }) {
+            GameStatus::InProgress
+        }
+        else {
+            GameStatus::Win(color.opposite())
+        }
+    }
+    else if all_potential_moves(board)[color].iter()
+        .any(|&(r, c)| !allowed_moves(board, r, c, *color).is_empty()) {
+        GameStatus::InProgress
+    }
+    else {
+        GameStatus::Draw
+    }
 }
 
 #[cfg(test)]
@@ -224,7 +265,7 @@ mod test {
     use std::collections::{HashMap, HashSet};
     use crate::board::{Board, Color, HEIGHT, new_board, Piece, PieceType, WIDTH};
     use crate::Color::{Black, White};
-    use crate::moves::{legal_moves, all_potential_attacks, allowed_moves};
+    use crate::moves::{legal_moves, all_potential_attacks, allowed_moves, all_potential_moves};
 
     fn board_one_piece(row: usize, col: usize, color: Color, kind: PieceType) -> Board {
         let mut board = Board{
@@ -241,6 +282,39 @@ mod test {
         let board = board_one_piece(0, 0, Color::White, PieceType::King);
         let empty_moves = legal_moves(&board, 1, 1);
         assert_eq!(empty_moves, HashSet::new());
+    }
+
+    #[test]
+    fn test_en_passant() {
+        let mut board = board_one_piece(3, 4, White, PieceType::Pawn);
+        board.squares[0][0] = Some( Piece {color: White, kind: PieceType::King});
+        board.squares[7][7] = Some( Piece {color: Black, kind: PieceType::King});
+        board.king_positions = HashMap::from([(White, (0, 0)), (Black, (7, 7))]);
+        board.move_history.push((Piece { color: White, kind: PieceType::Pawn}, (1, 4), (3, 4)));
+        board.squares[3][6] = Some(Piece { color: White, kind: PieceType::Pawn});
+        board.squares[3][5] = Some(Piece { color: Black, kind: PieceType::Pawn});
+        let moves = allowed_moves(&board, 3, 5, Black);
+        assert_eq!(moves, HashSet::from([(2, 5), (2, 4)]));
+
+        board.make_move((3, 5), (2, 4));
+
+        let count = (0 .. HEIGHT).into_iter()
+            .flat_map(|c| (0..WIDTH).into_iter().map(move |r| (r, c)))
+            .filter(|&(r, c)| board.squares[r][c].is_some())
+            .count();
+        assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn test_all_potential_moves() {
+        let mut board = board_one_piece(2, 1, White, PieceType::Pawn);
+        board.squares[3][0] = Some(Piece {color: Black, kind: PieceType::Pawn});
+        board.squares[3][2] = Some(Piece {color: Black, kind: PieceType::Pawn});
+        let all_moves = all_potential_moves(&board);
+        assert_eq!(all_moves[&White], HashSet::from([(3, 0), (3, 1), (3, 2)]));
+
+        let all_attacks = all_potential_attacks(&board);
+        assert_eq!(all_attacks[&White], HashSet::from([(3, 0), (3, 2)]));
     }
 
     #[test]

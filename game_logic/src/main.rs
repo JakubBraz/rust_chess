@@ -91,6 +91,19 @@ fn send_possible_moves(socket: &mut WebSocket<TcpStream>, moves: HashSet<(usize,
     try_send(socket, msg);
 }
 
+fn send_game_over(socket: &mut WebSocket<TcpStream>, winner: Option<Color>) {
+    let result = match winner {
+        None => MsgTypeServer::GameResultDraw,
+        Some(color) => match color {
+            Color::White => MsgTypeServer::GameResultWhiteWon,
+            Color::Black => MsgTypeServer::GameResultBlackWon,
+        }
+    };
+    let msg = JsonMsgServer { msg_type: result, rooms: Vec::new(), board: None, room_id: None, color: None, possible_moves: HashSet::new() };
+    let msg = serde_json::to_string(&msg).expect("Cannot serialize");
+    try_send(socket, msg);
+}
+
 fn main() {
     let logger_env = env_logger::Env::default().filter_or("LOG_LEVEL", "TRACE");
     env_logger::Builder::from_env(logger_env).format_timestamp_millis().init();

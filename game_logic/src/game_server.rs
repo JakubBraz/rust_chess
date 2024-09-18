@@ -2,13 +2,14 @@ use std::collections::{HashMap, HashSet};
 use std::net::TcpStream;
 use std::sync::mpsc::Receiver;
 use rand::random;
+use tungstenite::protocol::Role;
 use tungstenite::WebSocket;
-use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_board_user, send_new_room, send_possible_moves};
+use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_board_user, send_new_room, send_possible_moves, send_game_over};
 use crate::board::Color::{Black, White};
-use crate::board::{new_board, Color, Piece, PieceType};
+use crate::board::{new_board, Board, Color, GameStatus, Piece, PieceType};
 use crate::board::PieceType::{King, Pawn};
 use crate::communication_protocol::{JsonMsg, MsgType};
-use crate::moves::allowed_moves;
+use crate::moves::{all_potential_attacks, all_potential_moves, allowed_moves, game_result};
 
 #[derive(Debug)]
 pub enum ChannelMsg {
@@ -112,8 +113,8 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                                         White
                                     }
                                 };
-                                // board.color_to_play() == player_color && allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
-                                allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
+                                board.color_to_play() == player_color && allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
+                                // allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
                             }
                             _ => false
                         };
@@ -121,32 +122,23 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                         if is_legal_move {
                             let (board, white, black) = boards.get_mut(&room_id).expect("Board must be provided");
                             let piece = board.squares[move_from.0][move_from.1].expect("Move must be legal");
-                            board.move_history.push((piece, move_from, move_to));
-                            board.squares[move_from.0][move_from.1] = None;
-                            board.squares[move_to.0][move_to.1] = Some(piece);
-                            if piece.kind == King {
-                                board.king_positions.insert(piece.color, move_to);
-                                if move_from.0 == move_to.0 && move_to.1 + 3 == move_from.1 {
-                                    board.squares[move_from.0][2] = board.squares[move_from.0][0];
-                                    board.squares[move_from.0][0] = None;
+                            board.make_move(move_from, move_to);
+                            let client_white = clients.get(&white.expect("Must be provided")).expect("Must be provided");
+                            let client_black = clients.get(&black.expect("Must be provided")).expect("Must be provided");
+                            send_board_update(&mut clone_ws(client_white), board);
+                            send_board_update(&mut clone_ws(client_black), board);
+
+                            match game_result(board) {
+                                GameStatus::InProgress => {}
+                                GameStatus::Win(c) => {
+                                    send_game_over(&mut clone_ws(client_white), Some(c));
+                                    send_game_over(&mut clone_ws(client_black), Some(c));
                                 }
-                                else if move_from.0 == move_to.0 && move_from.1 + 2 == move_to.1 {
-                                    board.squares[move_from.0][5] = board.squares[move_from.0][7];
-                                    board.squares[move_from.0][7] = None;
+                                GameStatus::Draw => {
+                                    send_game_over(&mut clone_ws(client_white), None);
+                                    send_game_over(&mut clone_ws(client_black), None);
                                 }
-                            }
-                            else if piece.kind == Pawn {
-                                if move_to.0 == 7 && piece.color == White {
-                                    board.squares[move_to.0][move_to.1] = Some(Piece { color: White, kind: PieceType::Queen });
-                                }
-                                else if piece.color == Black && move_to.0 == 0 {
-                                    board.squares[move_to.0][move_to.1] = Some(Piece { color: Black, kind: PieceType::Queen });
-                                }
-                            }
-                            let client_white = clients.get_mut(&white.expect("Must be provided")).expect("Must be provided");
-                            send_board_update(client_white, board);
-                            let client_black = clients.get_mut(&black.expect("Must be provided")).expect("Must be provided");
-                            send_board_update(client_black, board);
+                            };
                         }
                         log::debug!("Move done");
                     }
@@ -209,4 +201,9 @@ fn get_player_color(websocket_id: u32, white_id: u32, black_id: u32) -> Color {
         log::warn!("Cannot find player color, websocket_id: {}", websocket_id);
         White
     }
+}
+
+fn clone_ws(websocket: &WebSocket<TcpStream>) -> WebSocket<TcpStream> {
+    let tcp_stream: TcpStream = websocket.get_ref().try_clone().unwrap();
+    WebSocket::from_raw_socket(tcp_stream, Role::Server, Some(websocket.get_config().clone()))
 }
