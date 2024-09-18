@@ -113,8 +113,8 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                                         White
                                     }
                                 };
-                                // board.color_to_play() == player_color && allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
-                                allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
+                                board.color_to_play() == player_color && allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
+                                // allowed_moves(board, move_from.0, move_from.1, player_color).contains(&move_to)
                             }
                             _ => false
                         };
