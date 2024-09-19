@@ -271,7 +271,8 @@ mod test {
         let mut board = Board{
             squares: [[None; WIDTH]; HEIGHT],
             move_history: Vec::new(),
-            king_positions: if kind == PieceType::King { HashMap::from([(color, (row, col))]) } else { HashMap::new() }
+            king_positions: if kind == PieceType::King { HashMap::from([(color, (row, col))]) } else { HashMap::new() },
+            game_over: false
         };
         board.squares[row][col] = Some(Piece {color, kind});
         board

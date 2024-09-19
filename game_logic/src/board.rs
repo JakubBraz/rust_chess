@@ -53,7 +53,8 @@ impl Piece {
 pub struct Board {
     pub squares: [[Option<Piece>; WIDTH]; HEIGHT],
     pub move_history: Vec<(Piece, (usize, usize), (usize, usize))>,
-    pub king_positions: HashMap<Color, (usize, usize)>
+    pub king_positions: HashMap<Color, (usize, usize)>,
+    pub game_over: bool,
 }
 
 impl Board {
@@ -155,6 +156,7 @@ pub fn new_board() -> Board {
         new_pieces(Color::Black)
     ],
         move_history: Vec::new(),
-        king_positions: HashMap::from([(Color::White, (0, 4)), (Color::Black, (7, 4))])
+        king_positions: HashMap::from([(Color::White, (0, 4)), (Color::Black, (7, 4))]),
+        game_over: false
     }
 }

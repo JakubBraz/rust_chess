@@ -12,6 +12,7 @@ use tungstenite::protocol::Role;
 
 use crate::board::{Board, Color, new_board, to_string};
 use crate::communication_protocol::{JsonMsg, JsonMsgServer, MsgType, MsgTypeServer, ServerMsg};
+use crate::communication_protocol::MsgType::Rematch;
 use crate::game_server::ChannelMsg;
 
 mod moves;
@@ -99,8 +100,14 @@ fn send_game_over(socket: &mut WebSocket<TcpStream>, winner: Option<Color>) {
     try_send(socket, msg);
 }
 
+fn send_rematch_offer(socket: &mut WebSocket<TcpStream>, my_offer: bool) {
+    let msg = ServerMsg::Rematch {my_offer};
+    let msg = serde_json::to_string(&msg).expect("Cannot serialize");
+    try_send(socket, msg);
+}
+
 fn main() {
-    let logger_env = env_logger::Env::default().filter_or("LOG_LEVEL", "TRACE");
+    let logger_env = env_logger::Env::default().filter_or("LOG_LEVEL", "DEBUG");
     env_logger::Builder::from_env(logger_env).format_timestamp_millis().init();
 
     let (sender_origin, receiver): (Sender<ChannelMsg>, Receiver<ChannelMsg>) = channel();

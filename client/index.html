@@ -30,8 +30,12 @@
             <td>
                 <div id="post_game">
                     <p id="winner_text">Game over, white won!</p>
-                    <button id="rematch_button">Rematch</button>
+                    <button id="rematch_button" onclick = "rematch_offer()">Rematch</button>
                     <button id="exit_button" onclick="location.reload()">Exit</button>
+                    <div id="rematchDiv">
+                        <p id="rematch_text"></p>
+                        <div class="loader"></div>
+                    </div>
                 </div>
                 <div id="waiting">
                     <p id="wait_text">Waiting for another player to join...</p>

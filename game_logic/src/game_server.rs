@@ -4,7 +4,7 @@ use std::sync::mpsc::Receiver;
 use rand::random;
 use tungstenite::protocol::Role;
 use tungstenite::WebSocket;
-use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_new_room, send_possible_moves, send_game_over};
+use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_new_room, send_possible_moves, send_game_over, send_rematch_offer};
 use crate::board::Color::{Black, White};
 use crate::board::{new_board, Board, Color, GameStatus, Piece, PieceType};
 use crate::board::PieceType::{King, Pawn};
@@ -36,8 +36,29 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
             }
 
             ChannelMsg::Msg(websocket_id, decoded) => {
-                let websocket = clients.get_mut(&websocket_id).expect("Cannot find client");
+                let mut websocket = clone_ws(&clients.get(&websocket_id).expect("Cannot find client"));
                 match decoded.msg_type {
+                    MsgType::Create => {
+                        let board_id: u32 = random();
+                        let new_board = new_board();
+                        // let ws = WebSocket::from_raw_socket(stream_clone, Role::Server, Some(websocket.get_config().clone()));
+                        let is_white: bool = random();
+                        log::debug!("is white {}", is_white);
+                        let (white, black) = if is_white {
+                            (Some(websocket_id), None)
+                        } else {
+                            (None, Some(websocket_id))
+                        };
+                        log::debug!("Broadcasting");
+                        log::debug!("trying to insert {:?}", (board_id, (&new_board, white, black)));
+                        boards.insert(board_id, (new_board, white, black));
+                        log::debug!("broadcast done");
+
+                        broadcast_rooms_message(&boards, &mut clients);
+                        let ws = clients.get_mut(&websocket_id).expect("Cannot find");
+                        send_new_room(ws, board_id, is_white);
+                        log::debug!("Done");
+                    }
                     MsgType::Join => {
                         let room_id = decoded.room_id;
                         let (board, new_white, new_black) = match boards.get(&room_id) {
@@ -48,15 +69,15 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                             Some((b, white_player, black_player)) => {
                                 match (white_player, black_player) {
                                     (None, Some(black)) => {
-                                        send_new_room(websocket, room_id, true);
-                                        send_board_update(websocket, &b, None);
+                                        send_new_room(&mut websocket, room_id, true);
+                                        send_board_update(&mut websocket, &b, None);
                                         let ws = clients.get_mut(black).expect("Cannot get");
                                         send_board_update(ws, &b, None);
                                         (Some(b.clone()), Some(websocket_id), Some(black.clone()))
                                     }
                                     (Some(white), None) => {
-                                        send_new_room(websocket, room_id, false);
-                                        send_board_update(websocket, &b, None);
+                                        send_new_room(&mut websocket, room_id, false);
+                                        send_board_update(&mut websocket, &b, None);
                                         let ws = clients.get_mut(white).expect("Cannot get");
                                         send_board_update(ws, &b, None);
                                         (Some(b.clone()), Some(white.clone()), Some(websocket_id))
@@ -78,26 +99,60 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                             }
                         }
                     }
-                    MsgType::Create => {
-                        let board_id: u32 = random();
-                        let new_board = new_board();
-                        // let ws = WebSocket::from_raw_socket(stream_clone, Role::Server, Some(websocket.get_config().clone()));
-                        let is_white: bool = random();
-                        log::debug!("is white {}", is_white);
-                        let (white, black) = if is_white {
-                            (Some(websocket_id), None)
-                        } else {
-                            (None, Some(websocket_id))
+                    MsgType::Rematch => {
+                        let room_id = decoded.room_id;
+                        let (old_board, white, black) = match boards.get(&room_id) {
+                            None => {
+                                log::warn!("Cannot find rematch room {}", room_id);
+                                return;
+                            }
+                            Some((board, white, black)) => (board, *white, *black)
                         };
-                        log::debug!("Broadcasting");
-                        log::debug!("trying to insert {:?}", (board_id, (&new_board, white, black)));
-                        boards.insert(board_id, (new_board, white, black));
-                        log::debug!("broadcast done");
 
-                        broadcast_rooms_message(&boards, &mut clients);
-                        let ws = clients.get_mut(&websocket_id).expect("Cannot find");
-                        send_new_room(ws, board_id, is_white);
-                        log::debug!("Done");
+                        if old_board.game_over {
+                            match (white, black) {
+                                (Some(white), Some(black)) => {
+                                    match websocket_id {
+                                        x if x == white => {
+                                            boards.insert(room_id, (old_board.clone(), None, Some(websocket_id)));
+                                            let black_socket = clients.get_mut(&black).expect("Cannot find");
+                                            send_rematch_offer(black_socket, false);
+                                            send_rematch_offer(&mut websocket, true);
+                                        }
+                                        x if x == black => {
+                                            boards.insert(room_id, (old_board.clone(), Some(websocket_id), None));
+                                            let white_socket = clients.get_mut(&white).expect("Cannot find");
+                                            send_rematch_offer(white_socket, false);
+                                            send_rematch_offer(&mut websocket, true);
+                                        }
+                                        _ => {
+                                            log::warn!("Wrong websocket id");
+                                        }
+                                    }
+                                }
+                                (Some(white), None) if white != websocket_id => {
+                                    let new_board = new_board();
+                                    let white_socket = clients.get_mut(&white).expect("Cannot find");
+                                    send_new_room(white_socket, room_id, true);
+                                    send_board_update(white_socket, &new_board, None);;
+                                    send_new_room(&mut websocket, room_id, false);
+                                    send_board_update(&mut websocket, &new_board, None);
+                                    boards.insert(room_id, (new_board, Some(white), Some(websocket_id)));
+                                }
+                                (None, Some(black)) if black != websocket_id => {
+                                    let new_board = new_board();
+                                    let black_socket = clients.get_mut(&black).expect("Cannot find");
+                                    send_new_room(black_socket, room_id, false);
+                                    send_board_update(black_socket, &new_board, None);;
+                                    send_new_room(&mut websocket, room_id, true);
+                                    send_board_update(&mut websocket, &new_board, None);
+                                    boards.insert(room_id, (new_board, Some(websocket_id), Some(black)));
+                                }
+                                _ => {
+                                    log::warn!("Unexpected state");
+                                }
+                            }
+                        }
                     }
                     MsgType::Move => {
                         // todo get room id from memory, not from the message
@@ -128,14 +183,18 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                             send_board_update(&mut clone_ws(client_black), board, Some((move_from, move_to)));
 
                             match game_result(board) {
-                                GameStatus::InProgress => {}
+                                GameStatus::InProgress => {
+                                    board.game_over = false;
+                                }
                                 GameStatus::Win(c) => {
                                     send_game_over(&mut clone_ws(client_white), Some(c));
                                     send_game_over(&mut clone_ws(client_black), Some(c));
+                                    board.game_over = true;
                                 }
                                 GameStatus::Draw => {
                                     send_game_over(&mut clone_ws(client_white), None);
                                     send_game_over(&mut clone_ws(client_black), None);
+                                    board.game_over = true;
                                 }
                             };
                         }
@@ -155,6 +214,9 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                                 }
                             }
                         };
+                    }
+                    MsgType::Ping => {
+                        log::debug!("Ping message from: {}", websocket_id);
                     }
                 };
             }

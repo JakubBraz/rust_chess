@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 #[derive(Debug, serde::Deserialize)]
 pub enum MsgType {
-    Join, Create, Move, Possible
+    Join, Create, Move, Possible, Rematch, Ping
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -37,4 +37,5 @@ pub struct JsonMsgServer {
 #[derive(serde::Serialize)]
 pub enum ServerMsg {
     Board{current_board: String, last_move: Option<((usize, usize), (usize, usize))>},
+    Rematch{my_offer: bool},
 }

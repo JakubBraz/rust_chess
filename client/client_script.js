@@ -1,5 +1,5 @@
-// const socket = new WebSocket("ws://127.0.0.1:9977");
-const socket = new WebSocket("ws://4.223.103.5:9977");
+const socket = new WebSocket("ws://127.0.0.1:9977");
+// const socket = new WebSocket("ws://4.223.103.5:9977");
 
 let canvasHTML = document.getElementById("chess-board");
 let context = canvasHTML.getContext("2d");
@@ -11,9 +11,6 @@ let LINE_LEN = SQUARE_HEIGHT * 0.2;
 // let LINE_OFFSET = LINE_SIZE * 5;
 let LINE_OFFSET = LINE_SIZE;
 
-let in_lobby = true;
-let game_started = false;
-
 let lobbyHTML = document.getElementById("lobby");
 let roomsHTML = document.getElementById("rooms");
 let gameHTML = document.getElementById("game");
@@ -21,15 +18,20 @@ let gameIdHtml = document.getElementById("game_id");
 let gameStartedHTML = document.getElementById("waiting");
 let postGameHTML = document.getElementById("post_game");
 let winnerTextHTML = document.getElementById("winner_text");
+let rematchHTML = document.getElementById("rematchDiv");
+let rematchTextHtml = document.getElementById("rematch_text");
 
+let in_lobby = true;
 let rooms = [];
 let myRoom = 0;
+
 let playerColor = "";
 let square_clicked = [];
 let possible_moves = [];
 let last_move = []
-
 let is_game_over = false;
+let game_started = false;
+let rematch_sent = false;
 
 let current_board = [
     "        ",
@@ -61,6 +63,12 @@ function draw() {
         gameHTML.style.display = "block";
         if (is_game_over) {
             postGameHTML.style.display = "block";
+            if (rematch_sent) {
+                rematchHTML.style.display = "block";
+            }
+            else {
+                rematchHTML.style.display = "none";
+            }
         }
         else {
             postGameHTML.style.display = "none";
@@ -167,14 +175,12 @@ function draw_attacked_field(row_on_screen, col_on_screen) {
 
 function createGameButton() {
     let msg = {"msg_type": "Create", "room_id": 0};
-    console.log("sending", msg);
-    socket.send(JSON.stringify(msg));
+    send_socket(msg);
 }
 
 function joinGameButton(roomId) {
     let msg = {"msg_type": "Join", "room_id": roomId};
-    console.log("sending", msg);
-    socket.send(JSON.stringify(msg));
+    send_socket(msg);
 }
 
 function compare_arrays(a, b) {
@@ -192,8 +198,7 @@ function compare_arrays(a, b) {
 function make_move(first_click, second_click) {
     if (first_click.length === 2 && second_click.length === 2) {
         let msg = {"msg_type": "Move", "make_move": [first_click, second_click], "room_id": myRoom};
-        console.log("Sending: ", msg);
-        socket.send(JSON.stringify(msg));
+        send_socket(msg);
         cancel_move();
     }
 }
@@ -201,7 +206,7 @@ function make_move(first_click, second_click) {
 function start_move(coords) {
     if (!is_game_over) {
         let msg = {"msg_type": "Possible", "room_id": myRoom, "possible_moves": coords};
-        socket.send(JSON.stringify(msg));
+        send_socket(msg);
     }
 }
 
@@ -211,6 +216,29 @@ function cancel_move() {
 
 function is_move_possible(coords) {
     return possible_moves.some(a => compare_arrays(a, coords));
+}
+
+function rematch_offer() {
+    let msg = {"msg_type": "Rematch", "room_id": myRoom};
+    send_socket(msg);
+}
+
+function send_socket(msg) {
+    console.log("Sending message:");
+    let json_msg = JSON.stringify(msg);
+    console.log(json_msg);
+    console.log(msg);
+    socket.send(json_msg);
+}
+
+function reset_game() {
+    playerColor = "";
+    square_clicked = [];
+    possible_moves = [];
+    last_move = []
+    is_game_over = false;
+    game_started = false;
+    rematch_sent = false;
 }
 
 canvasHTML.addEventListener("mousedown", event => {
@@ -252,18 +280,11 @@ socket.addEventListener("message", event => {
         rooms = decoded["rooms"];
     }
     else if(decoded["msg_type"] === "NewRoom") {
+        reset_game();
         gameIdHtml.textContent = "Room ID: " + decoded["room_id"];
         myRoom = decoded["room_id"];
         playerColor = decoded["color"];
         in_lobby = false;
-    }
-    else if("Board" in decoded) {
-        game_started = true;
-        current_board = parse_board(decoded["Board"]["current_board"]);
-        if (decoded["Board"]["last_move"] !== null) {
-            last_move = decoded["Board"]["last_move"];
-        }
-        cancel_move();
     }
     else if(decoded["msg_type"] === "Possible") {
         possible_moves = decoded["possible_moves"];
@@ -280,8 +301,30 @@ socket.addEventListener("message", event => {
         winnerTextHTML.textContent = "Game over, draw!";
         is_game_over = true;
     }
+    else if ("Rematch" in decoded) {
+        rematch_sent = true;
+        if (decoded["Rematch"]["my_offer"]) {
+            rematchTextHtml.textContent = "Rematch offer sent, waiting for the opponent...";
+        }
+        else {
+            rematchTextHtml.textContent = "Your opponent offers a rematch...";
+        }
+    }
+    else if("Board" in decoded) {
+        game_started = true;
+        current_board = parse_board(decoded["Board"]["current_board"]);
+        if (decoded["Board"]["last_move"] !== null) {
+            last_move = decoded["Board"]["last_move"];
+        }
+        cancel_move();
+    }
 
     draw();
 });
+
+setInterval(() => {
+    let msg = {"msg_type": "Ping", "room_id": myRoom};
+    send_socket(msg);
+}, 30_000);
 
 draw();
