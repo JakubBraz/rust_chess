@@ -1,5 +1,5 @@
-const socket = new WebSocket("ws://127.0.0.1:9977");
-// const socket = new WebSocket("ws://4.223.103.5:9977");
+// const socket = new WebSocket("ws://127.0.0.1:9977");
+const socket = new WebSocket("ws://4.223.103.5:9977");
 
 let canvasHTML = document.getElementById("chess-board");
 let context = canvasHTML.getContext("2d");
