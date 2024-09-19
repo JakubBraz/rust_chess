@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Receiver, SendError, Sender};
 use std::thread::{current, sleep, spawn};
 use std::time::Duration;
 
@@ -53,6 +53,7 @@ fn try_send(ws: &mut WebSocket<TcpStream>, msg: String) {
     }
 }
 
+// todo broadcasting to everyone may take a lot of time, better to create a separate thread for sending in a loop cases
 fn broadcast_rooms_message(boards: &BoardsType, clients: &mut ClientsType) {
     log::debug!("Sending rooms to {} clients", clients.len());
     let room_names: Vec<(u32, String)> = boards.iter()
@@ -65,6 +66,14 @@ fn broadcast_rooms_message(boards: &BoardsType, clients: &mut ClientsType) {
 
     for ws in clients.values_mut() {
         try_send(ws, msg.clone());
+    }
+}
+
+fn broadcast_players_online (clients: &mut ClientsType) {
+    let msg = ServerMsg::PlayersOnline {count: clients.len()};
+    let msg = serde_json::to_string(&msg).expect("Cannot serialize");
+    for client in clients.values_mut() {
+        try_send(client, msg.clone());
     }
 }
 
@@ -140,7 +149,12 @@ fn main() {
         let client_id: u32 = random();
 
         log::debug!("New connection");
-        sender.send(ChannelMsg::NewConnection(client_id, ws_clone)).expect("Cannot send channel");
+        match sender.send(ChannelMsg::NewConnection(client_id, ws_clone)) {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Cannot send NewConnection: {}", e);
+            }
+        };
 
         let t = spawn(move || {
             let thread_id = current().id();

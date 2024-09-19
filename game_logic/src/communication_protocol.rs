@@ -39,4 +39,5 @@ pub enum ServerMsg {
     Rematch{my_offer: bool},
     Rooms{room_names: Vec<(u32, String)>},
     Disconnected,
+    PlayersOnline{count: usize},
 }

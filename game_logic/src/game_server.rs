@@ -4,7 +4,7 @@ use std::sync::mpsc::Receiver;
 use rand::random;
 use tungstenite::protocol::Role;
 use tungstenite::WebSocket;
-use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_new_room, send_possible_moves, send_game_over, send_rematch_offer, send_opponent_disconnect};
+use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_new_room, send_possible_moves, send_game_over, send_rematch_offer, send_opponent_disconnect, broadcast_players_online};
 use crate::board::Color::{Black, White};
 use crate::board::{new_board, Board, Color, GameStatus, Piece, PieceType};
 use crate::board::PieceType::{King, Pawn};
@@ -33,6 +33,7 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                 let ws_clone = clone_ws(&websocket);
                 clients.insert(websocket_id, websocket);
                 broadcast_rooms_message(&boards, &mut HashMap::from([(websocket_id, ws_clone)]));
+                broadcast_players_online(&mut clients);
             }
 
             ChannelMsg::Msg(websocket_id, decoded) => {
@@ -263,6 +264,8 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                 if notify_rooms {
                     broadcast_rooms_message(&boards, &mut clients);
                 }
+
+                broadcast_players_online(&mut clients);
             }
 
             ChannelMsg::ValueMonitor => {

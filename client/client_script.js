@@ -22,6 +22,7 @@ let rematchHTML = document.getElementById("rematchDiv");
 let rematchTextHtml = document.getElementById("rematch_text");
 let nameFieldHTML = document.getElementById("name_field");
 let disconnectHTML = document.getElementById("opponent_disconnected");
+let playerOnlineHTML = document.getElementById("player_online");
 
 let in_lobby = true;
 let rooms = [];
@@ -338,7 +339,7 @@ socket.addEventListener("message", event => {
             rematchTextHtml.textContent = "Your opponent offers a rematch...";
         }
     }
-    else if("Board" in decoded) {
+    else if ("Board" in decoded) {
         game_started = true;
         current_board = parse_board(decoded["Board"]["current_board"]);
         if (decoded["Board"]["last_move"] !== null) {
@@ -346,8 +347,11 @@ socket.addEventListener("message", event => {
         }
         cancel_move();
     }
-    else if("Rooms" in decoded) {
+    else if ("Rooms" in decoded) {
         rooms = decoded["Rooms"]["room_names"];
+    }
+    else if ("PlayersOnline" in decoded) {
+        playerOnlineHTML.textContent = "Players online: " + decoded["PlayersOnline"]["count"];
     }
 
     draw();
