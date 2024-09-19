@@ -3,6 +3,15 @@ td {
     text-align: center;
 }
 
+#header_text {
+    font-size: 70px;
+    font-family: serif;
+}
+
+#lobby {
+    text-align: center;
+}
+
 #chess-board{
     border: 5px solid;
 }
@@ -13,6 +22,10 @@ td {
 
 #winner_text {
     font-size: 30px;
+}
+
+.center_table {
+    margin: auto;
 }
 
 .loader {

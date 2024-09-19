@@ -54,12 +54,13 @@ fn try_send(ws: &mut WebSocket<TcpStream>, msg: String) {
 }
 
 fn broadcast_rooms_message(boards: &BoardsType, clients: &mut ClientsType) {
-    log::debug!("Sending rooms to every client");
-    let rooms_id: Vec<u32> = boards.iter()
+    log::debug!("Sending rooms to {} clients", clients.len());
+    let room_names: Vec<(u32, String)> = boards.iter()
         .filter(|(room_id, (_, white, black))| white.is_some() ^ black.is_some())
-        .map(|(&room_id, (_, _, _))| room_id)
+        .map(|(&room_id, (b, _, _))| (room_id, b.name.clone()))
         .collect();
-    let server_msg = JsonMsgServer { msg_type: MsgTypeServer::Rooms, board: None, rooms: rooms_id, room_id: None, color: None, possible_moves: HashSet::new() };
+    // let server_msg = JsonMsgServer { msg_type: MsgTypeServer::Rooms, board: None, rooms: rooms_id, room_id: None, color: None, possible_moves: HashSet::new() };
+    let server_msg = ServerMsg::Rooms {room_names};
     let msg = serde_json::to_string(&server_msg).expect("Cannot serialize");
 
     for ws in clients.values_mut() {
@@ -68,7 +69,7 @@ fn broadcast_rooms_message(boards: &BoardsType, clients: &mut ClientsType) {
 }
 
 fn send_new_room(socket: &mut WebSocket<TcpStream>, room_id: u32, is_white: bool) {
-    let msg = JsonMsgServer { msg_type: MsgTypeServer::NewRoom, rooms: Vec::new(), board: None, room_id: Some(room_id), color: Some(if is_white { "white".to_string() } else { "black".to_string() }), possible_moves: HashSet::new() };
+    let msg = JsonMsgServer { msg_type: MsgTypeServer::NewRoom, board: None, room_id: Some(room_id), color: Some(if is_white { "white".to_string() } else { "black".to_string() }), possible_moves: HashSet::new() };
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
     try_send(socket, msg);
 }
@@ -82,7 +83,7 @@ fn send_board_update(socket: &mut WebSocket<TcpStream>, board: &Board, last_move
 }
 
 fn send_possible_moves(socket: &mut WebSocket<TcpStream>, moves: HashSet<(usize, usize)>) {
-    let msg = JsonMsgServer { msg_type: MsgTypeServer::Possible, rooms: Vec::new(), board: None, room_id: None, color: None, possible_moves: moves };
+    let msg = JsonMsgServer { msg_type: MsgTypeServer::Possible, board: None, room_id: None, color: None, possible_moves: moves };
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
     try_send(socket, msg);
 }
@@ -95,7 +96,7 @@ fn send_game_over(socket: &mut WebSocket<TcpStream>, winner: Option<Color>) {
             Color::Black => MsgTypeServer::GameResultBlackWon,
         }
     };
-    let msg = JsonMsgServer { msg_type: result, rooms: Vec::new(), board: None, room_id: None, color: None, possible_moves: HashSet::new() };
+    let msg = JsonMsgServer { msg_type: result, board: None, room_id: None, color: None, possible_moves: HashSet::new() };
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
     try_send(socket, msg);
 }

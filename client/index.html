@@ -8,13 +8,18 @@
 </head>
 <body>
 <div id="lobby">
-    <p>Chess client</p>
-    <button id="create_button" onclick="createGameButton()">Create</button>
-    <table id="rooms">
+    <p id="header_text">♛ ♚</p>
+    <table class="center_table">
+        <tr>
+            <td><input id="name_field" type="text" onblur="set_room_name()"></td>
+            <td><button id="create_button" onclick="createGameButton()">Create</button></td>
+        </tr>
+    </table>
+    <table id="rooms" class="center_table">
         <tr>
             <td>123</td>
             <td>
-                <button onclick="joinGameButton()">Join</button>
+                <button>Join</button>
             </td>
         </tr>
     </table>

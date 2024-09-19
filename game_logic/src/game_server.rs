@@ -27,12 +27,12 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
     loop {
         log::debug!("Waiting for message...");
         let msg = receiver.recv().expect("Cannot receive");
-        log::debug!("Msg received {:?}", msg);
+        log::debug!("Msg received");
         match msg {
             ChannelMsg::NewConnection(websocket_id, websocket) => {
+                let ws_clone = clone_ws(&websocket);
                 clients.insert(websocket_id, websocket);
-                //todo is this broadcast needed? we need only to send broadcast to this one
-                broadcast_rooms_message(&boards, &mut clients);
+                broadcast_rooms_message(&boards, &mut HashMap::from([(websocket_id, ws_clone)]));
             }
 
             ChannelMsg::Msg(websocket_id, decoded) => {
@@ -40,7 +40,13 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                 match decoded.msg_type {
                     MsgType::Create => {
                         let board_id: u32 = random();
-                        let new_board = new_board();
+                        let mut new_board = new_board();
+                        match decoded.room_name {
+                            None => {}
+                            Some(name) => if name.len() < 100 {
+                                new_board.name = name;
+                            }
+                        };
                         // let ws = WebSocket::from_raw_socket(stream_clone, Role::Server, Some(websocket.get_config().clone()));
                         let is_white: bool = random();
                         log::debug!("is white {}", is_white);
@@ -49,10 +55,7 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                         } else {
                             (None, Some(websocket_id))
                         };
-                        log::debug!("Broadcasting");
-                        log::debug!("trying to insert {:?}", (board_id, (&new_board, white, black)));
                         boards.insert(board_id, (new_board, white, black));
-                        log::debug!("broadcast done");
 
                         broadcast_rooms_message(&boards, &mut clients);
                         let ws = clients.get_mut(&websocket_id).expect("Cannot find");
@@ -237,6 +240,7 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                     log::debug!("Removing {}", id);
                     boards.remove(&id);
                 }
+                broadcast_rooms_message(&boards, &mut clients);
             }
 
             ChannelMsg::ValueMonitor => {

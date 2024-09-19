@@ -20,6 +20,7 @@ let postGameHTML = document.getElementById("post_game");
 let winnerTextHTML = document.getElementById("winner_text");
 let rematchHTML = document.getElementById("rematchDiv");
 let rematchTextHtml = document.getElementById("rematch_text");
+let nameFieldHTML = document.getElementById("name_field");
 
 let in_lobby = true;
 let rooms = [];
@@ -82,13 +83,14 @@ function draw() {
             roomsHTML.removeChild(roomsHTML.firstChild);
         }
 
-        rooms.forEach(room => {
+        rooms.forEach(one_room => {
             let trElement = document.createElement("tr");
             let td1 = document.createElement("td");
-            td1.textContent = "Room id: " + room;
+            // td1.textContent = "Room id: " + room;
+            td1.textContent = one_room[1];
             let td2 = document.createElement("td");
             let button = document.createElement("button");
-            button.onclick = () => joinGameButton(room);
+            button.onclick = () => joinGameButton(one_room[0]);
             button.textContent = "Join";
 
             trElement.appendChild(td1);
@@ -174,12 +176,12 @@ function draw_attacked_field(row_on_screen, col_on_screen) {
 }
 
 function createGameButton() {
-    let msg = {"msg_type": "Create", "room_id": 0};
+    let msg = {"msg_type": "Create", "room_id": 0, "room_name": nameFieldHTML.value};
     send_socket(msg);
 }
 
-function joinGameButton(roomId) {
-    let msg = {"msg_type": "Join", "room_id": roomId};
+function joinGameButton(room) {
+    let msg = {"msg_type": "Join", "room_id": room};
     send_socket(msg);
 }
 
@@ -241,6 +243,30 @@ function reset_game() {
     rematch_sent = false;
 }
 
+function set_room_name() {
+    if (nameFieldHTML.value !== "") {
+        localStorage.setItem("room_name", nameFieldHTML.value);
+    }
+    else {
+        let name = random_name();
+        localStorage.setItem("room_name", name);
+        nameFieldHTML.value = name;
+    }
+}
+
+function random_name() {
+    let part1 = ["Good", "Bad", "Nice", "Cool", "Big", "Small", "Huge", "Shy",
+        "Red", "Blue", "Green", "Yellow", "Orange", "Purple", "Black", "White"];
+    let part2 = ["Dog", "Bird", "Snake", "Snail", "Parrot", "Fox", "Bug", "Fly", "Pig", "Horse", "Cow",
+        "Box", "Car", "Rat", "Apple", "Ball", "Tree"];
+
+    return pick(part1) + pick(part2) + Math.floor(Math.random() * 1000) + "'s room";
+}
+
+function pick(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
 canvasHTML.addEventListener("mousedown", event => {
     if(game_started) {
         let coords = click_to_coords(
@@ -276,12 +302,9 @@ socket.addEventListener("message", event => {
     console.log("message received:", event.data);
     let decoded = JSON.parse(event.data);
     console.log("message decoded", decoded);
-    if(decoded["msg_type"] === "Rooms") {
-        rooms = decoded["rooms"];
-    }
-    else if(decoded["msg_type"] === "NewRoom") {
+    if(decoded["msg_type"] === "NewRoom") {
         reset_game();
-        gameIdHtml.textContent = "Room ID: " + decoded["room_id"];
+        gameIdHtml.textContent = nameFieldHTML.value;
         myRoom = decoded["room_id"];
         playerColor = decoded["color"];
         in_lobby = false;
@@ -318,6 +341,9 @@ socket.addEventListener("message", event => {
         }
         cancel_move();
     }
+    else if("Rooms" in decoded) {
+        rooms = decoded["Rooms"]["room_names"];
+    }
 
     draw();
 });
@@ -326,5 +352,10 @@ setInterval(() => {
     let msg = {"msg_type": "Ping", "room_id": myRoom};
     send_socket(msg);
 }, 30_000);
+
+if (!("room_name" in localStorage)) {
+    localStorage.setItem("room_name", random_name());
+}
+nameFieldHTML.value = localStorage.getItem("room_name");
 
 draw();

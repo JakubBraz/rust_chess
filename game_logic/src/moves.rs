@@ -272,7 +272,8 @@ mod test {
             squares: [[None; WIDTH]; HEIGHT],
             move_history: Vec::new(),
             king_positions: if kind == PieceType::King { HashMap::from([(color, (row, col))]) } else { HashMap::new() },
-            game_over: false
+            game_over: false,
+            name: "Room".to_string(),
         };
         board.squares[row][col] = Some(Piece {color, kind});
         board
