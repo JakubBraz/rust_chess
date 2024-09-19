@@ -57,7 +57,7 @@ fn try_send(ws: &mut WebSocket<TcpStream>, msg: String) {
 fn broadcast_rooms_message(boards: &BoardsType, clients: &mut ClientsType) {
     log::debug!("Sending rooms to {} clients", clients.len());
     let room_names: Vec<(u32, String)> = boards.iter()
-        .filter(|(room_id, (_, white, black))| white.is_some() ^ black.is_some())
+        .filter(|(room_id, (b, white, black))| (white.is_some() ^ black.is_some()) && !b.game_over)
         .map(|(&room_id, (b, _, _))| (room_id, b.name.clone()))
         .collect();
     // let server_msg = JsonMsgServer { msg_type: MsgTypeServer::Rooms, board: None, rooms: rooms_id, room_id: None, color: None, possible_moves: HashSet::new() };
@@ -69,6 +69,7 @@ fn broadcast_rooms_message(boards: &BoardsType, clients: &mut ClientsType) {
     }
 }
 
+// todo everytime a player refreshes page this broadcast is sent two times, rethink it, refactor (as in the previous comment, move broadcasting to a new thread, so main thread is not blocked)
 fn broadcast_players_online (clients: &mut ClientsType) {
     let msg = ServerMsg::PlayersOnline {count: clients.len()};
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");

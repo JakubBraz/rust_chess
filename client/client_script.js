@@ -269,6 +269,12 @@ function pick(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function exit_action() {
+    console.log("exit");
+    socket.close();
+    location.reload();
+}
+
 canvasHTML.addEventListener("mousedown", event => {
     if(game_started) {
         let coords = click_to_coords(
