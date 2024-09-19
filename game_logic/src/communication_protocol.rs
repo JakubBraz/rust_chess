@@ -33,3 +33,8 @@ pub struct JsonMsgServer {
     pub color: Option<String>,
     pub possible_moves: HashSet<(usize, usize)>,
 }
+
+#[derive(serde::Serialize)]
+pub enum ServerMsg {
+    Board{current_board: String, last_move: Option<((usize, usize), (usize, usize))>},
+}

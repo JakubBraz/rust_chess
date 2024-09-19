@@ -24,9 +24,10 @@ let winnerTextHTML = document.getElementById("winner_text");
 
 let rooms = [];
 let myRoom = 0;
-let myColor = "";
+let playerColor = "";
 let square_clicked = [];
 let possible_moves = [];
+let last_move = []
 
 let is_game_over = false;
 
@@ -112,8 +113,12 @@ function click_to_coords(color, x, y) {
 
 function draw_board() {
     let lightColor = '#ddb180';
-    let darkColor = '#7c330c';
-    let color = myColor;
+    let lastLight = '#bfd04e';
+    // let darkColor = '#7c330c';
+    let darkColor = '#8b5c43';
+    let lastDark = '#7d8a28';
+
+    let color = playerColor;
 
     let rowIndices = color === "white" ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
     let colIndices = color === "white" ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
@@ -123,6 +128,14 @@ function draw_board() {
         for (let col_on_screen = 0; col_on_screen < 8; col_on_screen++) {
             let col = colIndices[col_on_screen];
             context.fillStyle = row % 2 !== col % 2 ? lightColor : darkColor;
+            if (last_move.length > 0 && (row === last_move[0][0] && col === last_move[0][1] || row === last_move[1][0] && col === last_move[1][1])) {
+                if (context.fillStyle === darkColor) {
+                    context.fillStyle = lastDark;
+                }
+                else {
+                    context.fillStyle = lastLight;
+                }
+            }
             context.fillRect(col_on_screen * SQUARE_WIDTH, row_on_screen * SQUARE_HEIGHT, SQUARE_WIDTH, SQUARE_HEIGHT);
             context.font = "90px Arial";
             let element = current_board[row][col];
@@ -203,7 +216,7 @@ function is_move_possible(coords) {
 canvasHTML.addEventListener("mousedown", event => {
     if(game_started) {
         let coords = click_to_coords(
-            myColor,
+            playerColor,
             event.clientX - canvasHTML.getBoundingClientRect().left,
             event.clientY - canvasHTML.getBoundingClientRect().top);
         if (is_move_possible(coords)) {
@@ -220,7 +233,7 @@ canvasHTML.addEventListener("mousedown", event => {
 canvasHTML.addEventListener("mouseup", event => {
     if(game_started) {
         let coords = click_to_coords(
-            myColor,
+            playerColor,
             event.clientX - canvasHTML.getBoundingClientRect().left,
             event.clientY - canvasHTML.getBoundingClientRect().top);
 
@@ -234,18 +247,22 @@ canvasHTML.addEventListener("mouseup", event => {
 socket.addEventListener("message", event => {
     console.log("message received:", event.data);
     let decoded = JSON.parse(event.data);
+    console.log("message decoded", decoded);
     if(decoded["msg_type"] === "Rooms") {
         rooms = decoded["rooms"];
     }
     else if(decoded["msg_type"] === "NewRoom") {
         gameIdHtml.textContent = "Room ID: " + decoded["room_id"];
         myRoom = decoded["room_id"];
-        myColor = decoded["color"];
+        playerColor = decoded["color"];
         in_lobby = false;
     }
-    else if(decoded["msg_type"] === "Board") {
+    else if("Board" in decoded) {
         game_started = true;
-        current_board = parse_board(decoded["board"]);
+        current_board = parse_board(decoded["Board"]["current_board"]);
+        if (decoded["Board"]["last_move"] !== null) {
+            last_move = decoded["Board"]["last_move"];
+        }
         cancel_move();
     }
     else if(decoded["msg_type"] === "Possible") {

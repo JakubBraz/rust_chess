@@ -11,7 +11,7 @@ use tungstenite::handshake::server::NoCallback;
 use tungstenite::protocol::Role;
 
 use crate::board::{Board, Color, new_board, to_string};
-use crate::communication_protocol::{JsonMsg, JsonMsgServer, MsgType, MsgTypeServer};
+use crate::communication_protocol::{JsonMsg, JsonMsgServer, MsgType, MsgTypeServer, ServerMsg};
 use crate::game_server::ChannelMsg;
 
 mod moves;
@@ -66,21 +66,16 @@ fn broadcast_rooms_message(boards: &BoardsType, clients: &mut ClientsType) {
     }
 }
 
-fn send_board_user(socket: &mut WebSocket<TcpStream>, board: &Board) {
-    let str_board = to_string(board);
-    let msg = JsonMsgServer { msg_type: MsgTypeServer::Board, rooms: Vec::new(), board: Some(str_board), room_id: None, color: None, possible_moves: HashSet::new() };
-    let msg = serde_json::to_string(&msg).expect("Cannot serialize");
-    try_send(socket, msg);
-}
-
 fn send_new_room(socket: &mut WebSocket<TcpStream>, room_id: u32, is_white: bool) {
     let msg = JsonMsgServer { msg_type: MsgTypeServer::NewRoom, rooms: Vec::new(), board: None, room_id: Some(room_id), color: Some(if is_white { "white".to_string() } else { "black".to_string() }), possible_moves: HashSet::new() };
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
     try_send(socket, msg);
 }
 
-fn send_board_update(socket: &mut WebSocket<TcpStream>, board: &Board) {
-    let msg = JsonMsgServer { msg_type: MsgTypeServer::Board, rooms: Vec::new(), board: Some(to_string(board)), room_id: None, color: None, possible_moves: HashSet::new() };
+fn send_board_update(socket: &mut WebSocket<TcpStream>, board: &Board, last_move: Option<((usize, usize), (usize, usize))>) {
+    // let msg = JsonMsgServer { msg_type: MsgTypeServer::Board{val1: 13, val2: 223}, rooms: Vec::new(), board: Some(to_string(board)), room_id: None, color: None, possible_moves: HashSet::new() };
+    let current_board = to_string(board);
+    let msg = ServerMsg::Board {current_board, last_move};
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
     try_send(socket, msg);
 }

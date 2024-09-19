@@ -4,7 +4,7 @@ use std::sync::mpsc::Receiver;
 use rand::random;
 use tungstenite::protocol::Role;
 use tungstenite::WebSocket;
-use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_board_user, send_new_room, send_possible_moves, send_game_over};
+use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_new_room, send_possible_moves, send_game_over};
 use crate::board::Color::{Black, White};
 use crate::board::{new_board, Board, Color, GameStatus, Piece, PieceType};
 use crate::board::PieceType::{King, Pawn};
@@ -49,16 +49,16 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                                 match (white_player, black_player) {
                                     (None, Some(black)) => {
                                         send_new_room(websocket, room_id, true);
-                                        send_board_user(websocket, &b);
+                                        send_board_update(websocket, &b, None);
                                         let ws = clients.get_mut(black).expect("Cannot get");
-                                        send_board_user(ws, &b);
+                                        send_board_update(ws, &b, None);
                                         (Some(b.clone()), Some(websocket_id), Some(black.clone()))
                                     }
                                     (Some(white), None) => {
                                         send_new_room(websocket, room_id, false);
-                                        send_board_user(websocket, &b);
+                                        send_board_update(websocket, &b, None);
                                         let ws = clients.get_mut(white).expect("Cannot get");
-                                        send_board_user(ws, &b);
+                                        send_board_update(ws, &b, None);
                                         (Some(b.clone()), Some(white.clone()), Some(websocket_id))
                                     }
                                     _ => {
@@ -125,8 +125,8 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                             board.make_move(move_from, move_to);
                             let client_white = clients.get(&white.expect("Must be provided")).expect("Must be provided");
                             let client_black = clients.get(&black.expect("Must be provided")).expect("Must be provided");
-                            send_board_update(&mut clone_ws(client_white), board);
-                            send_board_update(&mut clone_ws(client_black), board);
+                            send_board_update(&mut clone_ws(client_white), board, Some((move_from, move_to)));
+                            send_board_update(&mut clone_ws(client_black), board, Some((move_from, move_to)));
 
                             match game_result(board) {
                                 GameStatus::InProgress => {}
