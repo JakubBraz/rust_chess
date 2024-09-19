@@ -36,7 +36,7 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
             }
 
             ChannelMsg::Msg(websocket_id, decoded) => {
-                let mut websocket = clients.get_mut(&websocket_id).expect("Cannot find client");
+                let websocket = clients.get_mut(&websocket_id).expect("Cannot find client");
                 match decoded.msg_type {
                     MsgType::Join => {
                         let room_id = decoded.room_id;
@@ -121,7 +121,6 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
 
                         if is_legal_move {
                             let (board, white, black) = boards.get_mut(&room_id).expect("Board must be provided");
-                            let piece = board.squares[move_from.0][move_from.1].expect("Move must be legal");
                             board.make_move(move_from, move_to);
                             let client_white = clients.get(&white.expect("Must be provided")).expect("Must be provided");
                             let client_black = clients.get(&black.expect("Must be provided")).expect("Must be provided");

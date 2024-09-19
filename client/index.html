@@ -1,49 +1,47 @@
 <!doctype html>
 <html lang="">
 <head>
-  <title>Chess</title>
-  <link rel="stylesheet" href="styles.css">
-  <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
-  <meta content="utf-8" http-equiv="encoding">
+    <title>Chess</title>
+    <link rel="stylesheet" href="styles.css">
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+    <meta content="utf-8" http-equiv="encoding">
 </head>
 <body>
-  <div id="lobby">
+<div id="lobby">
     <p>Chess client</p>
     <button id="create_button" onclick="createGameButton()">Create</button>
     <table id="rooms">
-      <tr>
-        <td>123</td>
-        <td><button onclick="joinGameButton()">Join</button></td>
-      </tr>
-<!--      <div class="join_button">456<button onclick="joinGameButton()">Join</button></div>-->
-<!--      <div class="join_button">789<button onclick="joinGameButton()">Join</button></div>-->
+        <tr>
+            <td>123</td>
+            <td>
+                <button onclick="joinGameButton()">Join</button>
+            </td>
+        </tr>
     </table>
-  </div>
+</div>
 
-<!--  <table>-->
-<!--    <tr>-->
-<!--      <td>1</td>-->
-<!--      <td>&#9817</td>-->
-<!--      <td>3</td>-->
-<!--    </tr>-->
-<!--    <tr>-->
-<!--      <td>4</td>-->
-<!--      <td id="field">&#9823</td>-->
-<!--      <td>6</td>-->
-<!--    </tr>-->
-<!--  </table>-->
-
-  <div id="game">
+<div id="game">
     <p id="game_id"></p>
-    <canvas id="chess-board" width="800" height="800"></canvas>
-    <div id="post_game">
-      <p id="winner_text">Game over, white won!</p>
-      <button id="rematch_button">Rematch</button>
-      <button id="exit_button" onclick="location.reload()">Exit</button>
-    </div>
-    <p id="waiting">Waiting for another player to join...</p>
-  </div>
+    <table>
+        <tr>
+            <td>
+                <canvas id="chess-board" width="800" height="800"></canvas>
+            </td>
+            <td>
+                <div id="post_game">
+                    <p id="winner_text">Game over, white won!</p>
+                    <button id="rematch_button">Rematch</button>
+                    <button id="exit_button" onclick="location.reload()">Exit</button>
+                </div>
+                <div id="waiting">
+                    <p id="wait_text">Waiting for another player to join...</p>
+                    <div class="loader"></div>
+                </div>
+            </td>
+        </tr>
+    </table>
+</div>
 
-  <script src="client_script.js"></script>
+<script src="client_script.js"></script>
 </body>
 </html>

@@ -121,8 +121,8 @@ fn potential_moves(board: &Board, row: usize, col: usize) -> HashSet<(usize, usi
                                     last_piece.kind == PieceType::Pawn &&
                                         last_piece.color != p.color &&
                                         (last_start.0 == START_RANK_BLACK || last_start.0 == START_RANK_WHITE) &&
-                                        last_start.1 == *c &&
-                                        last_stop.0 == row
+                                        last_start.1 == *c && last_stop.0 == row &&
+                                        (last_start.0 + 2 == last_stop.0 || last_stop.0 + 2 == last_start.0)
                             }
                         },
                         Some(_) => true
@@ -321,6 +321,17 @@ mod test {
             .filter(|&(r, c)| board.squares[r][c].is_some())
             .count();
         assert_eq!(count, 4);
+
+        let mut board = board_one_piece(5, 4, White, PieceType::Pawn);
+        board.squares[5][3] = Some(Piece { color: Black, kind: PieceType::Pawn});
+        board.squares[6][4] = Some(Piece { color: Black, kind: PieceType::Pawn});
+        board.squares[6][5] = Some(Piece { color: Black, kind: PieceType::Pawn});
+        board.squares[0][0] = Some( Piece {color: White, kind: PieceType::King});
+        board.squares[7][7] = Some( Piece {color: Black, kind: PieceType::King});
+        board.king_positions = HashMap::from([(White, (0, 0)), (Black, (7, 7))]);
+        board.move_history.push((Piece { color: Black, kind: PieceType::Pawn}, (6, 3), (5, 3)));
+        let moves = allowed_moves(&board, 5, 4, White);
+        assert_eq!(moves, HashSet::from([(6, 5)]));
     }
 
     #[test]
