@@ -4,7 +4,7 @@ use std::sync::mpsc::Receiver;
 use rand::random;
 use tungstenite::protocol::Role;
 use tungstenite::WebSocket;
-use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_new_room, send_possible_moves, send_game_over, send_rematch_offer};
+use crate::{BoardsType, broadcast_rooms_message, send_board_update, send_new_room, send_possible_moves, send_game_over, send_rematch_offer, send_opponent_disconnect};
 use crate::board::Color::{Black, White};
 use crate::board::{new_board, Board, Color, GameStatus, Piece, PieceType};
 use crate::board::PieceType::{King, Pawn};
@@ -232,15 +232,37 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                 clients.remove(&client_id);
                 // todo store board_id in clients instead of searching it
                 // todo disconnect both websockets, notify players about game disconnect and game result
-                let ids: Vec<u32> = boards.iter()
-                    .filter_map(|(&board_id, (_b, white_id, black_id))|
-                        if white_id.is_some() && white_id.unwrap() == client_id || black_id.is_some() && black_id.unwrap() == client_id { Some(board_id) } else { None })
+
+                // if white_id.is_some() && white_id.unwrap() == client_id || black_id.is_some() && black_id.unwrap() == client_id { Some(board_id) } else { None })
+                let id_socket: Vec<(u32, Option<u32>)> = boards.iter()
+                    .filter_map(|(&board_id, (_b, white_id, black_id))| {
+                        if white_id.is_some_and(|x| x == client_id) {
+                            Some((board_id, *black_id))
+                        } else if black_id.is_some_and(|x| x == client_id) {
+                            Some((board_id, *white_id))
+                        } else {
+                            None
+                        }
+                    })
                     .collect();
-                for id in ids {
-                    log::debug!("Removing {}", id);
-                    boards.remove(&id);
+
+                let notify_rooms = id_socket.iter().any(|(_, client)| client.is_none());
+
+                for (board_id, potential_opponent) in id_socket {
+                    log::debug!("Removing board {}", board_id);
+                    boards.remove(&board_id);
+                    match potential_opponent.and_then(|x| clients.remove(&x)) {
+                        None => {}
+                        Some(mut socket) => {
+                            log::debug!("Disconnection notifying");
+                            send_opponent_disconnect(&mut socket);
+                        }
+                    };
                 }
-                broadcast_rooms_message(&boards, &mut clients);
+
+                if notify_rooms {
+                    broadcast_rooms_message(&boards, &mut clients);
+                }
             }
 
             ChannelMsg::ValueMonitor => {

@@ -38,4 +38,5 @@ pub enum ServerMsg {
     Board{current_board: String, last_move: Option<((usize, usize), (usize, usize))>},
     Rematch{my_offer: bool},
     Rooms{room_names: Vec<(u32, String)>},
+    Disconnected,
 }

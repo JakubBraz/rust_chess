@@ -16,11 +16,11 @@ td {
     border: 5px solid;
 }
 
-#waiting {
-    font-size: 30px;
+#opponent_disconnected {
+    display: none;
 }
 
-#winner_text {
+.side_text {
     font-size: 30px;
 }
 

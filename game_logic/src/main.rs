@@ -107,6 +107,12 @@ fn send_rematch_offer(socket: &mut WebSocket<TcpStream>, my_offer: bool) {
     try_send(socket, msg);
 }
 
+fn send_opponent_disconnect(socket: &mut WebSocket<TcpStream>) {
+    let msg = ServerMsg::Disconnected;
+    let msg = serde_json::to_string(&msg).expect("Cannot serialize");
+    try_send(socket, msg);
+}
+
 fn main() {
     let logger_env = env_logger::Env::default().filter_or("LOG_LEVEL", "DEBUG");
     env_logger::Builder::from_env(logger_env).format_timestamp_millis().init();
@@ -133,6 +139,7 @@ fn main() {
         let ws_clone = WebSocket::from_raw_socket(tcp_stream_clone, Role::Server, Some(websocket.get_config().clone()));
         let client_id: u32 = random();
 
+        log::debug!("New connection");
         sender.send(ChannelMsg::NewConnection(client_id, ws_clone)).expect("Cannot send channel");
 
         let t = spawn(move || {

@@ -21,6 +21,7 @@ let winnerTextHTML = document.getElementById("winner_text");
 let rematchHTML = document.getElementById("rematchDiv");
 let rematchTextHtml = document.getElementById("rematch_text");
 let nameFieldHTML = document.getElementById("name_field");
+let disconnectHTML = document.getElementById("opponent_disconnected");
 
 let in_lobby = true;
 let rooms = [];
@@ -302,25 +303,29 @@ socket.addEventListener("message", event => {
     console.log("message received:", event.data);
     let decoded = JSON.parse(event.data);
     console.log("message decoded", decoded);
-    if(decoded["msg_type"] === "NewRoom") {
+    if (decoded === "Disconnected") {
+        socket.close();
+        disconnectHTML.style.display = "block";
+    }
+    else if (decoded["msg_type"] === "NewRoom") {
         reset_game();
         gameIdHtml.textContent = nameFieldHTML.value;
         myRoom = decoded["room_id"];
         playerColor = decoded["color"];
         in_lobby = false;
     }
-    else if(decoded["msg_type"] === "Possible") {
+    else if (decoded["msg_type"] === "Possible") {
         possible_moves = decoded["possible_moves"];
     }
-    else if(decoded["msg_type"] === "GameResultWhiteWon") {
+    else if (decoded["msg_type"] === "GameResultWhiteWon") {
         winnerTextHTML.textContent = "Game over, white won!";
         is_game_over = true;
     }
-    else if(decoded["msg_type"] === "GameResultBlackWon") {
+    else if (decoded["msg_type"] === "GameResultBlackWon") {
         winnerTextHTML.textContent = "Game over, black won!";
         is_game_over = true;
     }
-    else if(decoded["msg_type"] === "GameResultDraw") {
+    else if (decoded["msg_type"] === "GameResultDraw") {
         winnerTextHTML.textContent = "Game over, draw!";
         is_game_over = true;
     }
