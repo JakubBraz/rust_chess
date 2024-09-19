@@ -68,8 +68,8 @@ impl Board {
         self.squares[move_to.0][move_to.1] = Some(piece);
         if piece.kind == PieceType::King {
             self.king_positions.insert(piece.color, move_to);
-            if move_from.0 == move_to.0 && move_to.1 + 3 == move_from.1 {
-                self.squares[move_from.0][2] = self.squares[move_from.0][0];
+            if move_from.0 == move_to.0 && move_to.1 + 2 == move_from.1 {
+                self.squares[move_from.0][3] = self.squares[move_from.0][0];
                 self.squares[move_from.0][0] = None;
             }
             else if move_from.0 == move_to.0 && move_from.1 + 2 == move_to.1 {

@@ -150,11 +150,10 @@ pub fn allowed_moves(board: &Board, row: usize, col: usize, color: Color) -> Has
                         if !board.move_history.iter().any(|&(p, _, _)| piece == p) {
                             let (long_castle, short_castle) = castle_rooks(piece.color);
                             if !board.move_history.iter().any(|&(_, from, _)| from == long_castle) {
-                                let squares = [(row, col), (row, col - 1), (row, col - 2)];
                                 if board.squares[row][col - 1].is_none() &&
                                     board.squares[row][col - 2].is_none() &&
-                                    board.squares[row][col - 3].is_none() && !squares.iter().any(|x| under_attack.contains(x)) {
-                                    moves.insert((row, col - 3));
+                                    ![(row, col), (row, col - 1)].iter().any(|x| under_attack.contains(x)) {
+                                    moves.insert((row, col - 2));
                                 }
                             }
                             if !board.move_history.iter().any(|&(_, from, _)| from == short_castle) {
@@ -342,17 +341,17 @@ mod test {
         board.squares[0][0] = Some(Piece {color: White, kind: PieceType::Rook});
         board.squares[0][7] = Some(Piece {color: White, kind: PieceType::Rook});
         let moves = allowed_moves(&board, 0, 4, White);
-        assert_eq!(moves.contains(&(0, 1)), true);
+        assert_eq!(moves.contains(&(0, 2)), true);
         assert_eq!(moves.contains(&(0, 6)), true);
 
         board.squares[7][5] = Some(Piece {color: Black, kind: PieceType::Rook});
         let moves = allowed_moves(&board, 0, 4, White);
-        assert_eq!(moves.contains(&(0, 1)), true);
+        assert_eq!(moves.contains(&(0, 2)), true);
         assert_eq!(moves.contains(&(0, 6)), false);
 
         board.squares[7][4] = Some(Piece {color: Black, kind: PieceType::Rook});
         let moves = allowed_moves(&board, 0, 4, White);
-        assert_eq!(moves.contains(&(0, 1)), false);
+        assert_eq!(moves.contains(&(0, 2)), false);
         assert_eq!(moves.contains(&(0, 6)), false);
     }
 
