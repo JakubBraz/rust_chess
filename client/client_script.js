@@ -38,7 +38,7 @@ let is_game_over = false;
 let game_started = false;
 let rematch_sent = false;
 
-let current_board = [
+let empty_board = [
     "RNBQKBNR",
     "PPPPPPPP",
     "        ",
@@ -48,6 +48,8 @@ let current_board = [
     "pppppppp",
     "rnbqkbnr"
 ]
+let board_index = 0;
+let board_history = [];
 
 let icons = {
     "p": "♟",
@@ -143,7 +145,7 @@ function draw_board() {
         for (let col_on_screen = 0; col_on_screen < 8; col_on_screen++) {
             let col = colIndices[col_on_screen];
             context.fillStyle = row % 2 !== col % 2 ? lightColor : darkColor;
-            if (last_move.length > 0 && (row === last_move[0][0] && col === last_move[0][1] || row === last_move[1][0] && col === last_move[1][1])) {
+            if (board_index === board_history.length - 1 && last_move.length > 0 && (row === last_move[0][0] && col === last_move[0][1] || row === last_move[1][0] && col === last_move[1][1])) {
                 if (context.fillStyle === darkColor) {
                     context.fillStyle = lastDark;
                 } else {
@@ -152,18 +154,26 @@ function draw_board() {
             }
             context.fillRect(col_on_screen * SQUARE_WIDTH, row_on_screen * SQUARE_HEIGHT, SQUARE_WIDTH, SQUARE_HEIGHT);
             context.font = "90px Arial";
+            let current_board = board_history.length > 0 ? board_history[board_index] : empty_board;
             let element = current_board[row][col];
             let piece = icons[element.toLowerCase()];
             context.fillStyle = "prnbqk".includes(element) ? "black" : "white";
             context.fillText(piece, (col_on_screen + 0.05) * SQUARE_WIDTH, (row_on_screen + 0.85) * SQUARE_HEIGHT);
-            if (possible_moves.some(x => x[0] === row && x[1] === col)) {
+            if (board_index === board_history.length - 1 && possible_moves.some(x => x[0] === row && x[1] === col)) {
                 draw_attacked_field(row_on_screen, col_on_screen);
             }
             draw_onboard_coordinates(row, col, row_on_screen, col_on_screen);
         }
     }
+    draw_history_move_overlay();
 }
 
+function draw_history_move_overlay() {
+    if (board_index < board_history.length - 1) {
+        context.fillStyle = "rgba(255, 255, 255, 0.5)"
+        context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+    }
+}
 
 function draw_onboard_coordinates(row, col, row_on_screen, col_on_screen) {
     context.font = "12px Arial";
@@ -209,6 +219,7 @@ function display_captured_pieces() {
     }
     for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
+            let current_board = board_history.length > 0 ? board_history[board_index] : empty_board;
             let elem = current_board[row][col];
             if (elem in counter) {
                 let new_val = counter[elem] - 1;
@@ -304,6 +315,8 @@ function reset_game() {
     is_game_over = false;
     game_started = false;
     rematch_sent = false;
+    board_history = [];
+    board_index = -1;
 }
 
 function set_room_name() {
@@ -336,8 +349,23 @@ function exit_action() {
     location.reload();
 }
 
+function navigation_left() {
+    board_index = board_index - 1 >= 0 ? board_index - 1 : board_index;
+    draw();
+    // if draw_board, captured pieced are not revered in time, which is better?
+    // draw_board();
+}
+
+function navigation_right() {
+    board_index = board_index + 1 < board_history.length ? board_index + 1 : board_index;
+    draw();
+}
+
 canvasHTML.addEventListener("mousedown", event => {
-    if(game_started) {
+    if (board_index < board_history.length - 1) {
+        board_index = board_history.length - 1;
+    }
+    else if(game_started) {
         let coords = click_to_coords(
             playerColor,
             event.clientX - canvasHTML.getBoundingClientRect().left,
@@ -366,6 +394,15 @@ canvasHTML.addEventListener("mouseup", event => {
         draw();
     }
 });
+
+document.onkeydown = e => {
+    if (e.key === "ArrowLeft") {
+        navigation_left();
+    }
+    else if (e.key === "ArrowRight") {
+        navigation_right();
+    }
+};
 
 socket.addEventListener("message", event => {
     console.log("message received:", event.data);
@@ -408,7 +445,8 @@ socket.addEventListener("message", event => {
     }
     else if ("Board" in decoded) {
         game_started = true;
-        current_board = parse_board(decoded["Board"]["current_board"]);
+        board_index = board_history.length;
+        board_history.push(parse_board(decoded["Board"]["current_board"]));
         if (decoded["Board"]["last_move"] !== null) {
             last_move = decoded["Board"]["last_move"];
         }
@@ -434,4 +472,5 @@ if (!("room_name" in localStorage)) {
 }
 nameFieldHTML.value = localStorage.getItem("room_name");
 
+reset_game();
 draw();
