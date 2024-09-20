@@ -33,7 +33,7 @@ let myRoom = 0;
 let playerColor = "";
 let square_clicked = [];
 let possible_moves = [];
-let last_move = []
+let last_moves = []
 let is_game_over = false;
 let game_started = false;
 let rematch_sent = false;
@@ -63,7 +63,6 @@ let icons = {
 
 let lightColor = '#ddb180';
 let lastLight = '#bfd04e';
-// let darkColor = '#7c330c';
 let darkColor = '#8b5c43';
 let lastDark = '#7d8a28';
 
@@ -136,6 +135,7 @@ function click_to_coords(color, x, y) {
 
 function draw_board() {
     let color = playerColor;
+    let last_move = board_index > 0 ? last_moves[board_index] : [];
 
     let rowIndices = color === "white" ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
     let colIndices = color === "white" ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
@@ -145,7 +145,7 @@ function draw_board() {
         for (let col_on_screen = 0; col_on_screen < 8; col_on_screen++) {
             let col = colIndices[col_on_screen];
             context.fillStyle = row % 2 !== col % 2 ? lightColor : darkColor;
-            if (board_index === board_history.length - 1 && last_move.length > 0 && (row === last_move[0][0] && col === last_move[0][1] || row === last_move[1][0] && col === last_move[1][1])) {
+            if (last_move.length > 0 && (row === last_move[0][0] && col === last_move[0][1] || row === last_move[1][0] && col === last_move[1][1])) {
                 if (context.fillStyle === darkColor) {
                     context.fillStyle = lastDark;
                 } else {
@@ -159,13 +159,21 @@ function draw_board() {
             let piece = icons[element.toLowerCase()];
             context.fillStyle = "prnbqk".includes(element) ? "black" : "white";
             context.fillText(piece, (col_on_screen + 0.05) * SQUARE_WIDTH, (row_on_screen + 0.85) * SQUARE_HEIGHT);
-            if (board_index === board_history.length - 1 && possible_moves.some(x => x[0] === row && x[1] === col)) {
-                draw_attacked_field(row_on_screen, col_on_screen);
-            }
+
+            draw_attacked_field(row, col, row_on_screen, col_on_screen);
             draw_onboard_coordinates(row, col, row_on_screen, col_on_screen);
         }
     }
     draw_history_move_overlay();
+}
+
+function is_mine(row, col) {
+    if (board_history.length === 0) {
+        return false;
+    }
+    let is_white = playerColor === "white";
+    let elem = board_history[board_index][row][col];
+    return elem !== ' ' && (is_white && elem === elem.toUpperCase() || !is_white && elem === elem.toLowerCase());
 }
 
 function draw_history_move_overlay() {
@@ -188,19 +196,22 @@ function draw_onboard_coordinates(row, col, row_on_screen, col_on_screen) {
     }
 }
 
-function draw_attacked_field(row_on_screen, col_on_screen) {
-    context.fillStyle = "#2fae01";
-    context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_SIZE, LINE_LEN);
-    context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_LEN, LINE_SIZE);
+function draw_attacked_field(row, col, row_on_screen, col_on_screen) {
+    if (board_index === board_history.length - 1 && (possible_moves.some(x => x[0] === row && x[1] === col)) ||
+        is_mine(row, col) && square_clicked.length === 2 && square_clicked[0] === row && square_clicked[1] === col) {
+        context.fillStyle = "#2fae01";
+        context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_SIZE, LINE_LEN);
+        context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_LEN, LINE_SIZE);
 
-    context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_SIZE - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_SIZE, LINE_LEN);
-    context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_LEN - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_LEN, LINE_SIZE);
+        context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_SIZE - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_SIZE, LINE_LEN);
+        context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_LEN - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_LEN, LINE_SIZE);
 
-    context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_LEN - LINE_OFFSET, LINE_SIZE, LINE_LEN);
-    context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_SIZE - LINE_OFFSET, LINE_LEN, LINE_SIZE);
+        context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_LEN - LINE_OFFSET, LINE_SIZE, LINE_LEN);
+        context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_SIZE - LINE_OFFSET, LINE_LEN, LINE_SIZE);
 
-    context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_SIZE - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_LEN - LINE_OFFSET, LINE_SIZE, LINE_LEN);
-    context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_LEN - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_SIZE - LINE_OFFSET, LINE_LEN, LINE_SIZE);
+        context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_SIZE - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_LEN - LINE_OFFSET, LINE_SIZE, LINE_LEN);
+        context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_LEN - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_SIZE - LINE_OFFSET, LINE_LEN, LINE_SIZE);
+    }
 }
 
 function display_captured_pieces() {
@@ -288,6 +299,7 @@ function start_move(coords) {
 
 function cancel_move() {
     possible_moves = [];
+    square_clicked = [];
 }
 
 function is_move_possible(coords) {
@@ -308,10 +320,10 @@ function send_socket(msg) {
 }
 
 function reset_game() {
-    playerColor = "";
+    // playerColor = "";
     square_clicked = [];
     possible_moves = [];
-    last_move = []
+    last_moves = []
     is_game_over = false;
     game_started = false;
     rematch_sent = false;
@@ -351,6 +363,7 @@ function exit_action() {
 
 function navigation_left() {
     board_index = board_index - 1 >= 0 ? board_index - 1 : board_index;
+    cancel_move();
     draw();
     // if draw_board, captured pieced are not revered in time, which is better?
     // draw_board();
@@ -374,9 +387,14 @@ canvasHTML.addEventListener("mousedown", event => {
             make_move(square_clicked, coords);
         }
         else {
-            start_move(coords);
+            if (!compare_arrays(coords, square_clicked)) {
+                start_move(coords);
+                square_clicked = coords;
+            }
+            else {
+                cancel_move();
+            }
         }
-        square_clicked = coords;
         draw();
     }
 });
@@ -447,9 +465,8 @@ socket.addEventListener("message", event => {
         game_started = true;
         board_index = board_history.length;
         board_history.push(parse_board(decoded["Board"]["current_board"]));
-        if (decoded["Board"]["last_move"] !== null) {
-            last_move = decoded["Board"]["last_move"];
-        }
+        let lm = decoded["Board"]["last_move"];
+        last_moves.push(lm !== null ? lm : []);
         cancel_move();
     }
     else if ("Rooms" in decoded) {
