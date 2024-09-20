@@ -199,12 +199,12 @@ function draw_onboard_coordinates(row, col, row_on_screen, col_on_screen) {
 
 function draw_attacked_field(row, col, row_on_screen, col_on_screen) {
     let color = "";
-    if (is_last_board() && possible_moves.some(x => x[0] === row && x[1] === col) ||
+    if (is_last_board() && compare_arrays(in_check, [row, col]) && board_history[board_index][row][col].toLowerCase() === 'k') {
+        color = "#ff0000";
+    }
+    else if (is_last_board() && possible_moves.some(x => x[0] === row && x[1] === col) ||
         is_mine(row, col) && compare_arrays(square_clicked, [row, col]) && !is_game_over) {
         color = "#2fae01";
-    }
-    else if (is_last_board() && compare_arrays(in_check, [row, col]) && board_history[board_index][row][col].toLowerCase() === 'k') {
-        color = "#ff0000";
     }
 
     if (color !== "") {
