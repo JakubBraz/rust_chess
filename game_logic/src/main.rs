@@ -3,7 +3,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver, SendError, Sender};
 use std::thread::{current, sleep, spawn};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rand::random;
 use tungstenite::{accept, HandshakeError, Message, ServerHandshake, WebSocket};
@@ -41,20 +41,16 @@ fn thread_game_monitor(sender: Sender<ChannelMsg>) {
     }
 }
 
-// fn thread_game_controller(rx: Receiver<u64>, mut boards: Arc<HashMap<u64, Board>>) {
-//     let number = rx.recv().expect("Cannot receive");
-//     boards.insert(number, new_board());
-// }
-
 fn try_send(ws: &mut WebSocket<TcpStream>, msg: String) {
     match ws.send(Message::Text(msg)) {
-        Ok(_) => log::debug!("Msg sent"),
+        Ok(_) => {}
         Err(e) => log::error!("Cannot send message, error: {}", e)
     }
 }
 
 // todo broadcasting to everyone may take a lot of time, better to create a separate thread for sending in a loop cases
 fn broadcast_rooms_message(boards: &BoardsType, clients: &mut ClientsType) {
+    let i = Instant::now();
     log::debug!("Sending rooms to {} clients", clients.len());
     let room_names: Vec<(u32, String)> = boards.iter()
         .filter(|(room_id, (b, white, black))| (white.is_some() ^ black.is_some()) && !b.game_over)
@@ -67,15 +63,18 @@ fn broadcast_rooms_message(boards: &BoardsType, clients: &mut ClientsType) {
     for ws in clients.values_mut() {
         try_send(ws, msg.clone());
     }
+    log::debug!("Broadcasting boards took: {:?}", i.elapsed());
 }
 
 // todo everytime a player refreshes page this broadcast is sent two times, rethink it, refactor (as in the previous comment, move broadcasting to a new thread, so main thread is not blocked)
 fn broadcast_players_online (clients: &mut ClientsType) {
+    let i = Instant::now();
     let msg = ServerMsg::PlayersOnline {count: clients.len()};
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
     for client in clients.values_mut() {
         try_send(client, msg.clone());
     }
+    log::debug!("Broadcasting online players took: {:?}", i.elapsed());
 }
 
 fn send_new_room(socket: &mut WebSocket<TcpStream>, room_id: u32, is_white: bool) {

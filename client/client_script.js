@@ -57,6 +57,12 @@ let icons = {
     " ": " "
 };
 
+let lightColor = '#ddb180';
+let lastLight = '#bfd04e';
+// let darkColor = '#7c330c';
+let darkColor = '#8b5c43';
+let lastDark = '#7d8a28';
+
 function draw() {
     if (!in_lobby) {
         if (game_started) {
@@ -124,12 +130,6 @@ function click_to_coords(color, x, y) {
 }
 
 function draw_board() {
-    let lightColor = '#ddb180';
-    let lastLight = '#bfd04e';
-    // let darkColor = '#7c330c';
-    let darkColor = '#8b5c43';
-    let lastDark = '#7d8a28';
-
     let color = playerColor;
 
     let rowIndices = color === "white" ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
@@ -143,8 +143,7 @@ function draw_board() {
             if (last_move.length > 0 && (row === last_move[0][0] && col === last_move[0][1] || row === last_move[1][0] && col === last_move[1][1])) {
                 if (context.fillStyle === darkColor) {
                     context.fillStyle = lastDark;
-                }
-                else {
+                } else {
                     context.fillStyle = lastLight;
                 }
             }
@@ -157,12 +156,26 @@ function draw_board() {
             if (possible_moves.some(x => x[0] === row && x[1] === col)) {
                 draw_attacked_field(row_on_screen, col_on_screen);
             }
+            draw_onboard_coordinates(row, col, row_on_screen, col_on_screen);
         }
     }
 }
 
+
+    function draw_onboard_coordinates(row, col, row_on_screen, col_on_screen) {
+        context.font = "12px Arial";
+        context.fillStyle = row_on_screen % 2 === col_on_screen % 2 ? darkColor : lightColor;
+        let row_symbol = "12345678"[row];
+        let col_symbol = "abcdefgh"[col];
+        if (row_on_screen === 7) {
+            context.fillText(col_symbol, col_on_screen * SQUARE_WIDTH + (SQUARE_WIDTH * 0.90), row_on_screen * SQUARE_HEIGHT + (SQUARE_HEIGHT * 0.95));
+        }
+        if (col_on_screen === 0) {
+            context.fillText(row_symbol, col_on_screen * SQUARE_WIDTH + (SQUARE_WIDTH * 0.03), row_on_screen * SQUARE_HEIGHT + (SQUARE_HEIGHT * 0.13));
+        }
+    }
+
 function draw_attacked_field(row_on_screen, col_on_screen) {
-    let line_size = 0.3;
     context.fillStyle = "#2fae01";
     context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_SIZE, LINE_LEN);
     context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_LEN, LINE_SIZE);
@@ -366,7 +379,7 @@ socket.addEventListener("message", event => {
 setInterval(() => {
     let msg = {"msg_type": "Ping", "room_id": myRoom};
     send_socket(msg);
-}, 30_000);
+}, 59_000);
 
 if (!("room_name" in localStorage)) {
     localStorage.setItem("room_name", random_name());
