@@ -37,6 +37,7 @@ let last_moves = []
 let is_game_over = false;
 let game_started = false;
 let rematch_sent = false;
+let in_check = [];
 
 let empty_board = [
     "RNBQKBNR",
@@ -197,9 +198,17 @@ function draw_onboard_coordinates(row, col, row_on_screen, col_on_screen) {
 }
 
 function draw_attacked_field(row, col, row_on_screen, col_on_screen) {
-    if (board_index === board_history.length - 1 && (possible_moves.some(x => x[0] === row && x[1] === col)) ||
-        is_mine(row, col) && square_clicked.length === 2 && square_clicked[0] === row && square_clicked[1] === col) {
-        context.fillStyle = "#2fae01";
+    let color = "";
+    if (is_last_board() && possible_moves.some(x => x[0] === row && x[1] === col) ||
+        is_mine(row, col) && compare_arrays(square_clicked, [row, col]) && !is_game_over) {
+        color = "#2fae01";
+    }
+    else if (is_last_board() && compare_arrays(in_check, [row, col]) && board_history[board_index][row][col].toLowerCase() === 'k') {
+        color = "#ff0000";
+    }
+
+    if (color !== "") {
+        context.fillStyle = color;
         context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_SIZE, LINE_LEN);
         context.fillRect(col_on_screen * SQUARE_WIDTH + LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + LINE_OFFSET, LINE_LEN, LINE_SIZE);
 
@@ -212,6 +221,10 @@ function draw_attacked_field(row, col, row_on_screen, col_on_screen) {
         context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_SIZE - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_LEN - LINE_OFFSET, LINE_SIZE, LINE_LEN);
         context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_LEN - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_SIZE - LINE_OFFSET, LINE_LEN, LINE_SIZE);
     }
+}
+
+function is_last_board() {
+    return board_index === board_history.length - 1;
 }
 
 function display_captured_pieces() {
@@ -329,6 +342,7 @@ function reset_game() {
     rematch_sent = false;
     board_history = [];
     board_index = -1;
+    in_check = [];
 }
 
 function set_room_name() {
@@ -467,6 +481,8 @@ socket.addEventListener("message", event => {
         board_history.push(parse_board(decoded["Board"]["current_board"]));
         let lm = decoded["Board"]["last_move"];
         last_moves.push(lm !== null ? lm : []);
+        let check = decoded["Board"]["in_check"];
+        in_check = check !== null ? check : [];
         cancel_move();
     }
     else if ("Rooms" in decoded) {

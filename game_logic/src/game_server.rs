@@ -74,16 +74,16 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                                 match (white_player, black_player) {
                                     (None, Some(black)) => {
                                         send_new_room(&mut websocket, room_id, true);
-                                        send_board_update(&mut websocket, &b, None);
+                                        send_board_update(&mut websocket, &b, None, None);
                                         let ws = clients.get_mut(black).expect("Cannot get");
-                                        send_board_update(ws, &b, None);
+                                        send_board_update(ws, &b, None, None);
                                         (Some(b.clone()), Some(websocket_id), Some(black.clone()))
                                     }
                                     (Some(white), None) => {
                                         send_new_room(&mut websocket, room_id, false);
-                                        send_board_update(&mut websocket, &b, None);
+                                        send_board_update(&mut websocket, &b, None, None);
                                         let ws = clients.get_mut(white).expect("Cannot get");
-                                        send_board_update(ws, &b, None);
+                                        send_board_update(ws, &b, None, None);
                                         (Some(b.clone()), Some(white.clone()), Some(websocket_id))
                                     }
                                     _ => {
@@ -138,18 +138,18 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                                     let new_board = new_board();
                                     let white_socket = clients.get_mut(&white).expect("Cannot find");
                                     send_new_room(white_socket, room_id, true);
-                                    send_board_update(white_socket, &new_board, None);;
+                                    send_board_update(white_socket, &new_board, None, None);
                                     send_new_room(&mut websocket, room_id, false);
-                                    send_board_update(&mut websocket, &new_board, None);
+                                    send_board_update(&mut websocket, &new_board, None, None);
                                     boards.insert(room_id, (new_board, Some(white), Some(websocket_id)));
                                 }
                                 (None, Some(black)) if black != websocket_id => {
                                     let new_board = new_board();
                                     let black_socket = clients.get_mut(&black).expect("Cannot find");
                                     send_new_room(black_socket, room_id, false);
-                                    send_board_update(black_socket, &new_board, None);;
+                                    send_board_update(black_socket, &new_board, None, None);
                                     send_new_room(&mut websocket, room_id, true);
-                                    send_board_update(&mut websocket, &new_board, None);
+                                    send_board_update(&mut websocket, &new_board, None, None);
                                     boards.insert(room_id, (new_board, Some(websocket_id), Some(black)));
                                 }
                                 _ => {
@@ -181,10 +181,13 @@ pub fn handle_game(receiver: Receiver<ChannelMsg>) {
                         if is_legal_move {
                             let (board, white, black) = boards.get_mut(&room_id).expect("Board must be provided");
                             board.make_move(move_from, move_to);
+                            let king_pos = board.king_positions[&board.color_to_play()];
+                            let in_check = all_potential_attacks(board)[&board.color_to_play().opposite()].contains(&king_pos).then_some(king_pos);
+
                             let client_white = clients.get(&white.expect("Must be provided")).expect("Must be provided");
                             let client_black = clients.get(&black.expect("Must be provided")).expect("Must be provided");
-                            send_board_update(&mut clone_ws(client_white), board, Some((move_from, move_to)));
-                            send_board_update(&mut clone_ws(client_black), board, Some((move_from, move_to)));
+                            send_board_update(&mut clone_ws(client_white), board, Some((move_from, move_to)), in_check);
+                            send_board_update(&mut clone_ws(client_black), board, Some((move_from, move_to)), in_check);
 
                             match game_result(board) {
                                 GameStatus::InProgress => {

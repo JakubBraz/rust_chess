@@ -83,10 +83,9 @@ fn send_new_room(socket: &mut WebSocket<TcpStream>, room_id: u32, is_white: bool
     try_send(socket, msg);
 }
 
-fn send_board_update(socket: &mut WebSocket<TcpStream>, board: &Board, last_move: Option<((usize, usize), (usize, usize))>) {
-    // let msg = JsonMsgServer { msg_type: MsgTypeServer::Board{val1: 13, val2: 223}, rooms: Vec::new(), board: Some(to_string(board)), room_id: None, color: None, possible_moves: HashSet::new() };
+fn send_board_update(socket: &mut WebSocket<TcpStream>, board: &Board, last_move: Option<((usize, usize), (usize, usize))>, in_check: Option<(usize, usize)>) {
     let current_board = to_string(board);
-    let msg = ServerMsg::Board {current_board, last_move};
+    let msg = ServerMsg::Board {current_board, last_move, in_check};
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
     try_send(socket, msg);
 }
