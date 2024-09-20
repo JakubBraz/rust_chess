@@ -23,6 +23,8 @@ let rematchTextHtml = document.getElementById("rematch_text");
 let nameFieldHTML = document.getElementById("name_field");
 let disconnectHTML = document.getElementById("opponent_disconnected");
 let playerOnlineHTML = document.getElementById("player_online");
+let capturedPiecesUpHTML = document.getElementById("pieces_lost_up");
+let capturedPiecesDownHTML = document.getElementById("pieces_lost_down");
 
 let in_lobby = true;
 let rooms = [];
@@ -37,18 +39,18 @@ let game_started = false;
 let rematch_sent = false;
 
 let current_board = [
+    "RNBQKBNR",
+    "PPPPPPPP",
     "        ",
     "        ",
     "        ",
     "        ",
-    "        ",
-    "        ",
-    "        ",
-    "        "
+    "pppppppp",
+    "rnbqkbnr"
 ]
 
 let icons = {
-    "p": "♟︎",
+    "p": "♟",
     "r": "♜",
     "b": "♝",
     "n": "♞",
@@ -83,6 +85,7 @@ function draw() {
             postGameHTML.style.display = "none";
         }
         draw_board();
+        display_captured_pieces();
     }
     else {
         lobbyHTML.style.display = "block";
@@ -162,18 +165,18 @@ function draw_board() {
 }
 
 
-    function draw_onboard_coordinates(row, col, row_on_screen, col_on_screen) {
-        context.font = "12px Arial";
-        context.fillStyle = row_on_screen % 2 === col_on_screen % 2 ? darkColor : lightColor;
-        let row_symbol = "12345678"[row];
-        let col_symbol = "abcdefgh"[col];
-        if (row_on_screen === 7) {
-            context.fillText(col_symbol, col_on_screen * SQUARE_WIDTH + (SQUARE_WIDTH * 0.90), row_on_screen * SQUARE_HEIGHT + (SQUARE_HEIGHT * 0.95));
-        }
-        if (col_on_screen === 0) {
-            context.fillText(row_symbol, col_on_screen * SQUARE_WIDTH + (SQUARE_WIDTH * 0.03), row_on_screen * SQUARE_HEIGHT + (SQUARE_HEIGHT * 0.13));
-        }
+function draw_onboard_coordinates(row, col, row_on_screen, col_on_screen) {
+    context.font = "12px Arial";
+    context.fillStyle = row_on_screen % 2 === col_on_screen % 2 ? darkColor : lightColor;
+    let row_symbol = "12345678"[row];
+    let col_symbol = "abcdefgh"[col];
+    if (row_on_screen === 7) {
+        context.fillText(col_symbol, col_on_screen * SQUARE_WIDTH + (SQUARE_WIDTH * 0.90), row_on_screen * SQUARE_HEIGHT + (SQUARE_HEIGHT * 0.95));
     }
+    if (col_on_screen === 0) {
+        context.fillText(row_symbol, col_on_screen * SQUARE_WIDTH + (SQUARE_WIDTH * 0.03), row_on_screen * SQUARE_HEIGHT + (SQUARE_HEIGHT * 0.13));
+    }
+}
 
 function draw_attacked_field(row_on_screen, col_on_screen) {
     context.fillStyle = "#2fae01";
@@ -188,6 +191,51 @@ function draw_attacked_field(row_on_screen, col_on_screen) {
 
     context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_SIZE - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_LEN - LINE_OFFSET, LINE_SIZE, LINE_LEN);
     context.fillRect(col_on_screen * SQUARE_WIDTH + SQUARE_WIDTH - LINE_LEN - LINE_OFFSET, row_on_screen * SQUARE_HEIGHT + SQUARE_HEIGHT - LINE_SIZE - LINE_OFFSET, LINE_LEN, LINE_SIZE);
+}
+
+function display_captured_pieces() {
+    let pieces = "prnbqk";
+    let counter = {}
+    for (const p of pieces) {
+        let count = 2;
+        if (p === 'p'){
+            count = 8;
+        }
+        else if (p === 'q' || p === 'k') {
+            count = 1;
+        }
+        counter[p] = count;
+        counter[p.toUpperCase()] = count;
+    }
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            let elem = current_board[row][col];
+            if (elem in counter) {
+                let new_val = counter[elem] - 1;
+                counter[elem] = new_val >= 0 ? new_val : 0;
+            }
+        }
+    }
+    let transform = (arr) => arr.split('').map(x => x.repeat(counter[x])).join('');
+    let captured_by_black = transform("PNBRQ");
+    let captured_by_white = transform("pnbrq");
+    let to_str = (arr) => arr.split('').map(x => icons[x.toLowerCase()]).join('');
+    let [white_text, black_text] = [to_str(captured_by_white), to_str(captured_by_black)];
+    let outline_style = "0 0 2px black, 0 0 2px black, 0 0 2px black, 0 0 2px black";
+    if (playerColor === "white") {
+        capturedPiecesUpHTML.style.textShadow = outline_style;
+        capturedPiecesUpHTML.style.color = "white";
+        capturedPiecesUpHTML.textContent = black_text;
+        capturedPiecesDownHTML.style.color = "black";
+        capturedPiecesDownHTML.textContent = white_text;
+    }
+    else {
+        capturedPiecesUpHTML.style.color = "black";
+        capturedPiecesUpHTML.textContent = white_text;
+        capturedPiecesDownHTML.style.textShadow = outline_style;
+        capturedPiecesDownHTML.style.color = "white";
+        capturedPiecesDownHTML.textContent = black_text;
+    }
 }
 
 function createGameButton() {

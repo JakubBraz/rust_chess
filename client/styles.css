@@ -20,6 +20,33 @@ td {
     display: none;
 }
 
+#pieces_lost_up {
+    text-align: right;
+    padding-bottom: 0;
+    line-height: 25px;
+    font-size: 25px;
+}
+
+#pieces_lost_up:after {
+    content: "\00a0";
+}
+
+#pieces_lost_down {
+    text-align: left;
+    padding-top: 0;
+    line-height: 25px;
+    font-size: 25px;
+}
+
+#pieces_lost_down:after {
+    content: "\00a0";
+}
+
+#board_td {
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
 .side_text {
     font-size: 30px;
 }
@@ -42,7 +69,3 @@ td {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
-
-/*.join_button {*/
-/*    border: 1px black solid;*/
-/*}*/
