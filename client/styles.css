@@ -12,6 +12,10 @@ td {
     text-align: center;
 }
 
+#page-info {
+    text-align: right;
+}
+
 #chess-board{
     border: 5px solid;
 }
