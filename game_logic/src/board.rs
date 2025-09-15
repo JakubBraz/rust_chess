@@ -5,7 +5,7 @@ use crate::board::Color::{Black, White};
 pub const WIDTH: usize = 8;
 pub const HEIGHT: usize = 8;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum PieceType {
     King,
     Queen,
@@ -37,7 +37,7 @@ pub enum GameStatus {
     Draw
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Piece {
     pub color: Color,
     pub kind: PieceType
@@ -53,6 +53,8 @@ impl Piece {
 pub struct Board {
     pub squares: [[Option<Piece>; WIDTH]; HEIGHT],
     pub move_history: Vec<(Piece, (usize, usize), (usize, usize))>,
+    pub position_counter: HashMap<[[Option<Piece>; WIDTH]; HEIGHT], u32>,
+    pub max_position_count: u32,
     pub king_positions: HashMap<Color, (usize, usize)>,
     pub game_over: bool,
     pub name: String,
@@ -92,6 +94,12 @@ impl Board {
                 }
             }
         }
+
+        let val: u32 = *self.position_counter.get(&self.squares).unwrap_or(&0) + 1;
+        if self.max_position_count < val {
+            self.max_position_count = val;
+        }
+        self.position_counter.insert(self.squares, val);
     }
 }
 
@@ -146,7 +154,7 @@ fn new_empty() -> [Option<Piece>; WIDTH] {
 }
 
 pub fn new_board() -> Board {
-    Board { squares: [
+    let squares = [
         new_pieces(Color::White),
         new_pawns(Color::White),
         new_empty(),
@@ -155,10 +163,14 @@ pub fn new_board() -> Board {
         new_empty(),
         new_pawns(Color::Black),
         new_pieces(Color::Black)
-    ],
+    ];
+    Board {
+        squares,
         move_history: Vec::new(),
         king_positions: HashMap::from([(Color::White, (0, 4)), (Color::Black, (7, 4))]),
         game_over: false,
         name: "Room".to_string(),
+        position_counter: HashMap::from([(squares, 1)]),
+        max_position_count: 1,
     }
 }

@@ -223,6 +223,10 @@ pub fn all_potential_moves(board: &Board) -> HashMap<Color, HashSet<(usize, usiz
 }
 
 pub fn game_result(board: &Board) -> GameStatus {
+    if board.max_position_count == 3 {
+       return  GameStatus::Draw;
+    }
+
     let white_result = check_mate(board, &White);
     if white_result == GameStatus::InProgress {
         check_mate(board, &Black)
@@ -263,7 +267,7 @@ fn check_mate(board: &Board, color: &Color) -> GameStatus {
 #[cfg(test)]
 mod test {
     use std::collections::{HashMap, HashSet};
-    use crate::board::{Board, Color, HEIGHT, new_board, Piece, PieceType, WIDTH, GameStatus};
+    use crate::board::{Board, Color, HEIGHT, new_board, Piece, PieceType, WIDTH, GameStatus, to_string};
     use crate::Color::{Black, White};
     use crate::moves::{legal_moves, all_potential_attacks, allowed_moves, all_potential_moves, game_result};
 
@@ -274,9 +278,32 @@ mod test {
             king_positions: if kind == PieceType::King { HashMap::from([(color, (row, col))]) } else { HashMap::new() },
             game_over: false,
             name: "Room".to_string(),
+            position_counter: HashMap::new(),
+            max_position_count: 1,
         };
         board.squares[row][col] = Some(Piece {color, kind});
         board
+    }
+
+    #[test]
+    fn test_threefold_repetition_draw() {
+        let mut board = new_board();
+        board.make_move((0, 1), (2, 0));
+        assert_eq!(game_result(&board), GameStatus::InProgress);
+        board.make_move((7, 1), (5, 0));
+        assert_eq!(game_result(&board), GameStatus::InProgress);
+        board.make_move((2, 0), (0, 1));
+        assert_eq!(game_result(&board), GameStatus::InProgress);
+        board.make_move((5, 0), (7, 1));
+        assert_eq!(game_result(&board), GameStatus::InProgress);
+        board.make_move((0, 1), (2, 0));
+        assert_eq!(game_result(&board), GameStatus::InProgress);
+        board.make_move((7, 1), (5, 0));
+        assert_eq!(game_result(&board), GameStatus::InProgress);
+        board.make_move((2, 0), (0, 1));
+        assert_eq!(game_result(&board), GameStatus::InProgress);
+        board.make_move((5, 0), (7, 1));
+        assert_eq!(game_result(&board), GameStatus::Draw);
     }
 
     #[test]
