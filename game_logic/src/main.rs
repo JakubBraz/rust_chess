@@ -155,7 +155,7 @@ fn main() {
             }
         };
 
-        let t = spawn(move || {
+        spawn(move || {
             let thread_id = current().id();
             log::debug!("New client");
             loop {
