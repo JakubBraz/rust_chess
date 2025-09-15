@@ -1,0 +1,10 @@
+[package]
+name = "ai_client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chess = {path = "../game_logic"}
+tungstenite = "0.27.0"
+serde_json = "1.0.145"
+rand = "0.9.2"

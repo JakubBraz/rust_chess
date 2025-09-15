@@ -11,6 +11,7 @@ use tungstenite::handshake::server::NoCallback;
 use tungstenite::protocol::Role;
 
 use crate::board::{Board, Color, new_board, to_string};
+use crate::board::Color::{Black, White};
 use crate::communication_protocol::{JsonMsg, JsonMsgServer, MsgType, MsgTypeServer, ServerMsg};
 use crate::communication_protocol::MsgType::Rematch;
 use crate::game_server::ChannelMsg;
@@ -78,7 +79,7 @@ fn broadcast_players_online (clients: &mut ClientsType) {
 }
 
 fn send_new_room(socket: &mut WebSocket<TcpStream>, room_id: u32, is_white: bool) {
-    let msg = JsonMsgServer { msg_type: MsgTypeServer::NewRoom, board: None, room_id: Some(room_id), color: Some(if is_white { "white".to_string() } else { "black".to_string() }), possible_moves: HashSet::new() };
+    let msg = JsonMsgServer { msg_type: MsgTypeServer::NewRoom, board: None, room_id: Some(room_id), color: Some(if is_white { White } else { Black }), possible_moves: HashSet::new() };
     let msg = serde_json::to_string(&msg).expect("Cannot serialize");
     try_send(socket, msg);
 }

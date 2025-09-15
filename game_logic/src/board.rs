@@ -15,7 +15,7 @@ pub enum PieceType {
     Pawn,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Color {
     White, Black
 }

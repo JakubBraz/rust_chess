@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use crate::board::{Board, Color, HEIGHT, PieceType, WIDTH, Piece, GameStatus};
-use crate::Color::{Black, White};
+use crate::board::Color::{Black, White};
 
 const START_RANK_WHITE: usize = 1;
 const START_RANK_BLACK: usize = 6;

@@ -1,11 +1,12 @@
 use std::collections::HashSet;
+use crate::board::Color;
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub enum MsgType {
     Join, Create, Move, Possible, Rematch, Ping
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct JsonMsg {
     pub msg_type: MsgType,
     pub room_id: u32,
@@ -14,7 +15,7 @@ pub struct JsonMsg {
     pub room_name: Option<String>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub enum MsgTypeServer {
     GameResultWhiteWon,
     GameResultBlackWon,
@@ -23,16 +24,16 @@ pub enum MsgTypeServer {
     Possible,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct JsonMsgServer {
     pub msg_type: MsgTypeServer,
     pub board: Option<String>,
     pub room_id: Option<u32>,
-    pub color: Option<String>,
+    pub color: Option<Color>,
     pub possible_moves: HashSet<(usize, usize)>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub enum ServerMsg {
     Board{current_board: String, last_move: Option<((usize, usize), (usize, usize))>, in_check: Option<(usize, usize)>},
     Rematch{my_offer: bool},

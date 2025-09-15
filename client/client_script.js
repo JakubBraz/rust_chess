@@ -448,7 +448,7 @@ socket.addEventListener("message", event => {
         reset_game();
         gameIdHtml.textContent = nameFieldHTML.value;
         myRoom = decoded["room_id"];
-        playerColor = decoded["color"];
+        playerColor = decoded["color"].toLowerCase();
         in_lobby = false;
     }
     else if (decoded["msg_type"] === "Possible") {
