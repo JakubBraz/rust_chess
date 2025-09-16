@@ -1,5 +1,6 @@
 use std::net::TcpStream;
-use std::thread::{sleep, Thread};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread::{sleep, spawn, Thread};
 use std::time::Duration;
 use chess_logic_lib::board::{new_board, Board, Color, HEIGHT, WIDTH};
 use chess_logic_lib::board::Color::{Black, White};
@@ -12,15 +13,21 @@ use tungstenite::stream::MaybeTlsStream;
 const SERVER_ADDRESS: &str = "ws://127.0.0.1:9977";
 
 fn main() {
-    println!("Hello, world! This is AI client");
-    spawn_client();
+    let (tx, rx): (Sender<u8>, Receiver<u8>) = channel();
+    let _ = tx.send(0);
+    loop {
+        println!("waiting for signal...");
+        let _ = rx.recv();
+        let clone = tx.clone();
+        spawn(|| spawn_client(clone));
+    }
 }
 
-fn spawn_client() {
+fn spawn_client(tx: Sender<u8>) {
     let (mut socket, resp) = tungstenite::connect(SERVER_ADDRESS).expect("Can't connect to server");
     println!("server response: {:?}", resp);
-    let msg = chess_logic_lib::communication_protocol::JsonMsg {
-        msg_type: chess_logic_lib::communication_protocol::MsgType::Create,
+    let msg = JsonMsg {
+        msg_type: MsgType::Create,
         room_id: 0,
         make_move: None,
         possible_moves: None,
@@ -36,6 +43,7 @@ fn spawn_client() {
     let mut my_room = 0;
     let mut my_color = White;
     let mut board = new_board();
+    let mut before_first_msg = true;
     loop {
         println!("waiting...");
         match socket.read().unwrap() {
@@ -44,6 +52,10 @@ fn spawn_client() {
                 match serde_json::from_str::<ServerMsg>(&m) {
                     Ok(msg) => match msg {
                         ServerMsg::Board { current_board, last_move, in_check } => {
+                            if before_first_msg {
+                                let _ = tx.send(0);
+                                before_first_msg = false;
+                            }
                             if last_move.is_none() && my_color == Black {
                                 // wait for opponent move
                             }
@@ -69,7 +81,7 @@ fn spawn_client() {
                         }
                         ServerMsg::Rematch { .. } => {}
                         ServerMsg::Rooms { .. } => {}
-                        ServerMsg::Disconnected => {}
+                        ServerMsg::Disconnected => break,
                         ServerMsg::PlayersOnline { .. } => {}
                     }
                     Err(_) => {
@@ -97,6 +109,7 @@ fn spawn_client() {
             Message::Frame(_) => {}
         }
     }
+    println!("Stopping");
 }
 
 fn pick_random_move(board: &Board, color: Color) -> Option<((usize, usize), (usize, usize))> {
