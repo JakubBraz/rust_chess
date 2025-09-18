@@ -67,6 +67,7 @@ impl Board {
 
     pub fn make_move(&mut self, move_from: (usize, usize), move_to: (usize, usize)) {
         let piece = self.squares[move_from.0][move_from.1].unwrap();
+        let block_en_passant = self.squares[move_to.0][move_to.1].is_none();
         self.move_history.push((piece, move_from, move_to));
         self.squares[move_from.0][move_from.1] = None;
         self.squares[move_to.0][move_to.1] = Some(piece);
@@ -89,7 +90,7 @@ impl Board {
                 self.squares[move_to.0][move_to.1] = Some(Piece { color: Black, kind: PieceType::Queen });
             }
             else if move_from.1 + 1 == move_to.1 || move_to.1 + 1 == move_from.1 {
-                if self.squares[move_from.0][move_to.1].is_some_and(|x| x.kind == PieceType::Pawn && x.color != piece.color) {
+                if self.squares[move_from.0][move_to.1].is_some_and(|x| x.kind == PieceType::Pawn && x.color != piece.color) && block_en_passant {
                     self.squares[move_from.0][move_to.1] = None;
                 }
             }

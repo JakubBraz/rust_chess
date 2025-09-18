@@ -268,6 +268,7 @@ fn check_mate(board: &Board, color: &Color) -> GameStatus {
 mod test {
     use std::collections::{HashMap, HashSet};
     use crate::board::{Board, Color, HEIGHT, new_board, Piece, PieceType, WIDTH, GameStatus, to_string};
+    use crate::board::PieceType::Pawn;
     use crate::Color::{Black, White};
     use crate::moves::{legal_moves, all_potential_attacks, allowed_moves, all_potential_moves, game_result};
 
@@ -361,6 +362,25 @@ mod test {
         board.move_history.push((Piece { color: Black, kind: PieceType::Pawn}, (6, 3), (5, 3)));
         let moves = allowed_moves(&board, 5, 4, White);
         assert_eq!(moves, HashSet::from([(6, 5)]));
+
+        let mut board = new_board();
+        board.make_move((1, 3), (3, 3));
+        board.make_move((6, 4), (4, 4));
+        board.make_move((0, 3), (2, 3));
+        board.make_move((4, 4), (3, 4));
+        board.make_move((1, 7), (2, 7));
+        board.make_move((3, 4), (2, 3));
+        board.make_move((1, 2), (2, 3));
+        board.make_move((6, 2), (4, 2));
+        board.make_move((2, 7), (3, 7));
+        board.make_move((4, 2), (3, 2));
+        board.make_move((3, 7), (4, 7));
+        board.make_move((3, 2), (2, 3));
+        let pawns = (0..HEIGHT)
+            .flat_map(|r| (0..WIDTH).map(move |c| (r, c)))
+            .filter(|&(r, c)| board.squares[r][c].is_some_and(|x| x.color == White && x.kind == Pawn))
+            .count();
+        assert_eq!(pawns, 7);
     }
 
     #[test]
