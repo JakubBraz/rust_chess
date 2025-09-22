@@ -1,3 +1,4 @@
+use std::fs;
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread::{sleep, spawn, Thread};
@@ -6,6 +7,7 @@ use chess_logic_lib::board::{new_board, Board, Color, HEIGHT, WIDTH};
 use chess_logic_lib::board::Color::{Black, White};
 use chess_logic_lib::communication_protocol::{JsonMsg, MsgType, MsgTypeServer, ServerMsg};
 use chess_logic_lib::moves::allowed_moves;
+use neural_network_lib::neural_network::NeuralNetwork;
 use tungstenite::{Message, WebSocket};
 use rand::random;
 use tungstenite::stream::MaybeTlsStream;
@@ -43,6 +45,10 @@ fn spawn_client(tx: Sender<u8>) {
     let mut my_room = 0;
     let mut my_color = White;
     let mut board = new_board();
+    let network_name = "chess_network_113932_2025_09_18_11_39_07";
+    let network = NeuralNetwork::deserialize(&fs::read_to_string(format!("../neural_networks/{network_name}")).unwrap());
+    let mut network_input = [0.0; 400];
+    let mut move_i = 0;
     let mut before_first_msg = true;
     loop {
         println!("waiting...");
@@ -60,11 +66,37 @@ fn spawn_client(tx: Sender<u8>) {
                                 // wait for opponent move
                             }
                             else {
-                                if let Some((from, to)) = last_move {
-                                    board.make_move(from, to);
+                                if let Some((src, dst)) = last_move {
+                                    board.make_move(src, dst);
+                                    network_input[move_i + 0] = src.0 as f32;
+                                    network_input[move_i + 1] = src.1 as f32;
+                                    network_input[move_i + 2] = dst.0 as f32;
+                                    network_input[move_i + 3] = dst.1 as f32;
+                                    move_i += 4;
                                 }
 
-                                let next_move = pick_random_move(&board, my_color);
+                                let next_move = if move_i == 0 {
+                                    let move_d4: bool = random();
+                                    if move_d4 {
+                                        Some(((1, 3), (3, 3)))
+                                    }
+                                    else {
+                                        Some(((1, 4), (3, 4)))
+                                    }
+                                }
+                                else {
+                                    let next_move = neural_network_move(&network, &network_input);
+                                    println!("neural network move: {:?}", next_move);
+                                    let next_move = if allowed_moves(&board, next_move.0.0, next_move.0.1, my_color).contains(&(next_move.1.0, next_move.1.1)){
+                                        Some(next_move)
+                                    }
+                                    else {
+                                        println!("Illegal move, picking random");
+                                        pick_random_move(&board, my_color)
+                                    };
+                                    next_move
+                                };
+
                                 if next_move.is_some() {
                                     let new_move = JsonMsg {
                                         msg_type: MsgType::Move,
@@ -94,6 +126,7 @@ fn spawn_client(tx: Sender<u8>) {
                                     my_room = msg.room_id.unwrap();
                                     my_color = msg.color.unwrap();
                                     board = new_board();
+                                    network_input = [0.0; 400];
                                 }
                                 MsgTypeServer::Possible => {}
                             }
@@ -110,6 +143,14 @@ fn spawn_client(tx: Sender<u8>) {
         }
     }
     println!("Stopping");
+}
+
+fn neural_network_move(network: &NeuralNetwork, input: &[f32]) -> ((usize, usize), (usize, usize)) {
+    let res = network.process(input);
+    println!("neural network; input: {:?}", input);
+    println!("output: {:?}", res);
+    let res: Vec<usize> = res.iter().map(|&x| x.round() as usize).collect();
+    ((res[0], res[1]), (res[2], res[3]))
 }
 
 fn pick_random_move(board: &Board, color: Color) -> Option<((usize, usize), (usize, usize))> {

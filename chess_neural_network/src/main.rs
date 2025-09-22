@@ -10,20 +10,22 @@ use neural_network_lib::neural_network::NeuralNetwork;
 
 fn main() {
     // lichess database https://database.lichess.org/
-    let mut f = File::open("c:\\Users\\jakubbraz\\Downloads\\lichess_db_standard_rated_2025-08.pgn\\lichess_db_standard_rated_2025-08.pgn")
-        .unwrap();
-    let reader = BufReader::new(f.try_clone().unwrap());
+    let f = File::open("c:\\Users\\jakubbraz\\Downloads\\lichess_db_standard_rated_2025-08.pgn\\lichess_db_standard_rated_2025-08.pgn").unwrap();
+    let reader = BufReader::new(f);
     let mut iter = reader.lines();
     let mut find_elo = true;
 
     let mut board = new_board();
-    let mut network = NeuralNetwork::new(&[400, 1000, 4]);
+    // let mut network = NeuralNetwork::new(&[400, 1000, 1000, 1000, 4]);
+    // let mut network = NeuralNetwork::new(&[400, 1000, 1000, 4]);
+    let mut network = NeuralNetwork::new(&[64, 500, 4]);
     let before_learn_network = network.clone();
     let mut network_target = [0.0; 4];
-    let learning_rate = 0.1;
+    let learning_rate = 0.5;
 
     let t = Instant::now();
     let mut i = 0;
+    // let duration = Duration::from_secs(300 + 7 * 60 * 60);
     let duration = Duration::from_secs(3 * 60);
 
     println!("Learning started, duration: {:?}", duration);
@@ -54,73 +56,62 @@ fn main() {
         else if !find_elo && line.starts_with("1.") {
             let moves = parse_moves(&line);
             // println!("{:?}", moves);
-            let mut network_input = [1.0; 400];
-            let mut move_i = 0;
             for mv in moves {
+                // println!("mv {}", mv);
                 // println!("move_i {}", move_i);
                 let (src, dst) = parse_notation(&board, &mv);
+                let input = board_to_input(&board);
                 board.make_move(src, dst);
                 // println!("{:?}", (src, dst));
                 network_target[0] = (src.0 as f32) / 8.0;
                 network_target[1] = (src.1 as f32) / 8.0;
                 network_target[2] = (dst.0 as f32) / 8.0;
                 network_target[3] = (dst.1 as f32) / 8.0;
-                network.training_step(&network_input, &network_target, learning_rate);
-                network_input[move_i + 0] = (src.0 as f32) / 8.0;
-                network_input[move_i + 1] = (src.1 as f32) / 8.0;
-                network_input[move_i + 2] = (dst.0 as f32) / 8.0;
-                network_input[move_i + 3] = (dst.1 as f32) / 8.0;
-                move_i += 4;
-                if move_i == network_input.len() {
-                    // todo reconsider stop learning instead of starting over again
-                    move_i = 0;
-                }
+                network.training_step(&input, &network_target, learning_rate);
             }
             // println!("{:?}", board.move_history);
             board = new_board();
             find_elo = true;
-            f.seek(SeekFrom::Start(0)).unwrap();
-            iter = BufReader::new(f.try_clone().unwrap()).lines();
+            // f.seek(SeekFrom::Start(0)).unwrap();
+            // iter = BufReader::new(f.try_clone().unwrap()).lines();
         }
 
         // println!("{}", line);
     }
 
     println!("Process done, iterations: {i}, time elapsed {:?}", t.elapsed());
-    // fs::write(format!("../neural_networks/chess_network_{i}_{}", chrono::Utc::now().format("%Y_%m_%d_%H_%M_%S")), network.serialize()).unwrap();
+    // fs::write(format!("../neural_networks/chess_network_before_{i}_{}", chrono::Utc::now().format("%Y_%m_%d_%H_%M_%S")), before_learn_network.serialize()).unwrap();
+    // fs::write(format!("../neural_networks/chess_network_after_{i}_{}", chrono::Utc::now().format("%Y_%m_%d_%H_%M_%S")), network.serialize()).unwrap();
     fs::write("../neural_networks/chess_network_test", network.serialize()).unwrap();
 
-    let mut input = [1.0; 400];
-    input[0] = 1.0 / 8.0;
-    input[1] = 3.0 / 8.0;
-    input[2] = 3.0 / 8.0;
-    input[3] = 3.0 / 8.0;
-    println!("Answer to e4");
-    print_test_moves(&before_learn_network, &network, &input);
+    let mut board = new_board();
     println!("Answer to new board");
-    let input = [1.0; 400];
-    print_test_moves(&before_learn_network, &network, &input);
+    print_test_moves(&before_learn_network, &network, &board_to_input(&board));
+    board.make_move((1, 4), (3, 4));
+    println!("Answer to e4");
+    print_test_moves(&before_learn_network, &network, &board_to_input(&board));
+}
 
-    // let mut top_elo = 0;
-    // let mut i = 0;
-    // let mut lines = reader.lines();
-    // loop {
-    //     let line = match lines.next() {
-    //         None => break,
-    //         Some(x) => x.unwrap()
-    //     };
-    //     if line.starts_with("[WhiteElo") {
-    //         let next_line = lines.next().unwrap().unwrap();
-    //         if line.as_bytes()[11] == b'2' && next_line.as_bytes()[11] == b'2' {
-    //             top_elo += 1;
-    //         }
-    //     }
-    //     i += 1;
-    //     if i % 1_000_000 == 0 {
-    //         println!("line {}, top_elo: {}", i, top_elo);
-    //     }
-    // }
-    // println!("line count: {}", i);
+fn board_to_input(board: &Board) -> [f32; 64] {
+    let mut result = [0.0; 64];
+    for row in 0..HEIGHT {
+        for col in 0..WIDTH {
+            let is_white = if board.squares[row][col].is_some_and(|p| p.color == Black) { -1.0 } else { 1.0 };
+            let val = match board.squares[row][col] {
+                None => 0.0,
+                Some(p) => match p.kind {
+                    King => 0.9 * is_white,
+                    Queen => 0.8 * is_white,
+                    Rook => 0.7 * is_white,
+                    Bishop => 0.6 * is_white,
+                    Knight => 0.5 * is_white,
+                    Pawn => 0.4 * is_white,
+                }
+            };
+            result[row * HEIGHT + col] = val;
+        }
+    }
+    result
 }
 
 fn print_test_moves(before_network: &NeuralNetwork, after_network: &NeuralNetwork, input: &[f32]) {
@@ -237,4 +228,27 @@ fn to_coord(square: &str) -> (usize, usize) {
         unreachable!("wrong row value");
     }
     (row as usize - 1, col)
+}
+
+#[cfg(test)]
+mod test {
+    use chess_logic_lib::board::new_board;
+    use crate::board_to_input;
+
+    #[test]
+    fn test_board_to_input() {
+        let board = new_board();
+        let result = board_to_input(&board);
+        let expected = [
+            0.7, 0.5, 0.6, 0.8, 0.9, 0.6, 0.5, 0.7,
+            0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            -0.4, -0.4, -0.4, -0.4, -0.4, -0.4, -0.4, -0.4,
+            -0.7, -0.5, -0.6, -0.8, -0.9, -0.6, -0.5, -0.7
+        ];
+        assert_eq!(result, expected);
+    }
 }
